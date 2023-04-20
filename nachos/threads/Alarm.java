@@ -35,14 +35,17 @@ public class Alarm {
 	 * should be run.
 	 */
 	public void timerInterrupt() {
+		// create a new dummy hashmap
 		HashMap<KThread, Long> dummy = new HashMap<KThread, Long>();
-
+		// get the current walltime
 		long time = Machine.timer().getTime();
-
+		// put all the current threads in the ready queue into the dummy list
 		dummy.putAll(listOfThreads);
-		// for loop that iterates through the list of threads
+		// for loop that iterates through the list of threads in dummy
 		for (Iterator<KThread> keys = dummy.keySet().iterator(); keys.hasNext();) {
+			// get the current key, Kthread object
 			KThread key = keys.next();
+			// get the current value, which is a wake time
 			Long val = listOfThreads.get(key);
 			// if the current threads wakeTime is less than or equals to the time, enter
 			if (val <= time) {
@@ -52,7 +55,6 @@ public class Alarm {
 				listOfThreads.remove(key);
 			}
 		}
-
 		// current running thread not related to threads we are looking for
 		KThread.currentThread().yield();
 	}
@@ -80,13 +82,12 @@ public class Alarm {
 		// populate the list of threads Array list with a new pair of Kthread and wake
 		// time
 		listOfThreads.put(KThread.currentThread(), wakeTime);
-		System.out.println("Thread: " + KThread.currentThread());
-		// the current thread give the CPU back to the kernel, to give to another
-		// thread.
-		KThread.yield();
-
-		// while (wakeTime > Machine.timer().getTime())
-		// KThread.yield();
+		// disable interrupts from machine
+		Machine.interrupt().disable();
+		// put the threat to sleep, disabling the thread from running any further
+		KThread.sleep();
+		// reenable interrupts
+		Machine.interrupt().enable();
 	}
 
 	/**
@@ -118,4 +119,49 @@ public class Alarm {
 			System.out.println("alarmTest1: waited for " + (t1 - t0) + " ticks");
 		}
 	}
+
+	// Implement more test methods here ...
+	public static void alarmTest2() {
+		int duration = -300;
+		long t0, t1;
+		t0 = Machine.timer().getTime();
+		ThreadedKernel.alarm.waitUntil(duration);
+		t1 = Machine.timer().getTime();
+		System.out.println("alarmTest2: waited for " + (t1 - t0) + " ticks");
+	}
+
+	public static void alarmTest3(){
+		
+		int duration1 = 10000;
+		long t0, t1;
+		t0 = Machine.timer().getTime();
+		ThreadedKernel.alarm.waitUntil(duration1);
+		t1 = Machine.timer().getTime();
+		System.out.println("alarmTest3: waited for " + (t1 - t0) + " ticks");
+
+		KThread child1 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("I (heart) Nachos!");
+			}
+		});
+		child1.setName("child1").fork();
+
+		int duration2 = 100;
+		long t2, t3;
+		t2 = Machine.timer().getTime();
+		ThreadedKernel.alarm.waitUntil(duration2);
+		t3 = Machine.timer().getTime();
+
+		System.out.println("alarmTest3: waited for " + (t3 - t2) + " ticks");
+		
+	}
+
+    // Invoke Alarm.selfTest() from ThreadedKernel.selfTest()
+    public static void selfTest() {
+		alarmTest1();
+		// Invoke your other test methods here ...
+		alarmTest2();
+		// Invoke your other test methods here ...
+		alarmTest3();
+    }
 }

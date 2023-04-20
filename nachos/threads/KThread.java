@@ -13,7 +13,7 @@ import nachos.machine.*;
  * computes pi could be written as follows:
  * 
  * <p>
- * <blockquote>
+ * <blockquote>sleep
  * 
  * <pre>
  * class PiRun implements Runnable {
@@ -285,31 +285,32 @@ public class KThread {
 	public void join() {
 		// a thread cannot call join() on itself
 		if (currentThread.compareTo(this) == 0) {
+			System.out.println("Cannot join self");
 			return;
 		}
 		// a thread cannot be joined more than once
 		if (this.isJoined == true) {
 			// assert an error, as join has already been called
-			Lib.assertNotReached("Error: " + this.name + " has already been joined!");
+			Lib.assertTrue((this.isJoined == true), "Error: " + this.name + " has already been joined!");
+			System.out.println("this thread has already been joined!");
 			return;
 		}
 		// if the status of the child is finished
 		if (this.status == statusFinished) {
 			// return without waiting
 			this.isJoined = true;
+			System.out.println("Thread is finished, joined!");
 			return;
 		} else {
 			this.isJoined = true;
 			// the status of the child is not finished, so wait till it is
-			while (this.status == statusRunning) {
-				// wait
-				continue;
+			while (this.status != statusFinished){
+				System.out.println("waiting for child to finish...");
 			}
 		}
 		Lib.debug(dbgThread, "Joining to thread: " + toString());
 
 		Lib.assertTrue(this != currentThread);
-
 	}
 
 	/**
@@ -441,6 +442,15 @@ public class KThread {
 		new KThread(new PingTest(1)).setName("forked thread").fork();
 		new PingTest(0).run();
 		joinTest1();
+		System.out.println("----------TEST 2-------------");
+		joinTest2(currentThread());
+		System.out.println("----------TEST 3-------------");
+		joinTest3();
+		System.out.println("----------TEST 4-------------");
+		joinTest4();
+		// System.out.println("----------TEST 5-------------");
+		// joinTest5(currentThread());
+		
 	}
 
 	private static final char dbgThread = 't';
@@ -493,7 +503,7 @@ public class KThread {
 	private static KThread idleThread = null;
 
 	// ----------------------------------------------------- THE CODE BELOW IS A
-	// TESTING METHOD
+	// TESTING METHODS
 	private static void joinTest1() {
 		KThread child1 = new KThread(new Runnable() {
 			public void run() {
@@ -517,4 +527,81 @@ public class KThread {
 		Lib.assertTrue((child1.status == statusFinished), " Expected child1 to be finished.");
 	}
 
+	// test behavior for thread calling join on itself
+	private static void joinTest2(KThread thread) {
+		
+		try {
+			thread.join();
+			Lib.assertTrue((thread.isJoined == false), "Expected thread to not join on itself");
+		} catch (AssertionError e) {
+			System.out.println(e +  "Expected thread to not join on itself");
+		}
+	}
+
+	// thread can not call join more than once 
+	private static void joinTest3(){
+		KThread child1 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("I (heart) Nachos!");
+			}
+		});
+		child1.setName("child1").fork();	
+
+		try {
+			child1.join();
+			child1.join();
+		} catch (AssertionError e) {
+			System.out.println(e + "Check for assertion thread cannot call join more than once");
+		}
+	}	
+		
+		
+
+	// thread can call one to many joins
+	private static void joinTest4(){
+		KThread child1 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("Thread 1");
+			}
+		});
+		KThread child2 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("Thread 2");
+			}
+		});
+		KThread child3 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("Thread 3");
+			}
+		});
+		child1.setName("child1").fork();
+		child2.setName("child2").fork();
+		child3.setName("child3").fork();
+		
+		try {
+			child1.join();
+			child2.join();
+			child3.join();
+		} catch (AssertionError e) {
+			System.out.println(e);
+		}
+	}
+
+	/*
+	private static void joinTest5(KThread thread){
+		KThread child1 = new KThread(new Runnable() {
+			public void run() {
+				System.out.println("Thread 1");
+			}
+		});
+		child1.setName("child1").fork();
+
+		thread.yield();
+
+		child1.join();
+
+		child1.finish();
+		
+	}
+	*/
 }
