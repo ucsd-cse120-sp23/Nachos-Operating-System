@@ -202,11 +202,12 @@ public class KThread {
 		Lib.assertTrue(toBeDestroyed == null);
 		toBeDestroyed = currentThread;
 
-		// check to see if the child thread, if it is a child thread, has a parent, then set its parent to ready 
-		if(childParentThreadPairs.get(currentThread) != null){
-			// unblock the parent thread of the child
-			childParentThreadPairs.get(currentThread).ready();
-			childParentThreadPairs.remove(currentThread);
+		// chec if the current thread has a parent
+		if (currentThread.currentParent != null) {
+			// if it does, wake the parent up
+			currentThread.currentParent.ready();
+			// set the current parent to null
+			currentThread.currentParent = null;
 		}
 
 		currentThread.status = statusFinished;
@@ -285,9 +286,9 @@ public class KThread {
 
 	// boolean value to check if a thread has been called to be joined
 	private boolean isJoined = false;
+	// KThread Object that hold a reference to a parent object, if there exists one
+	private KThread currentParent = null;
 
-	// Hash Map that contains <Child, Parent> relationship, as a child can have at most one parent
-    private static HashMap<KThread, KThread> childParentThreadPairs = new HashMap<KThread, KThread>();
 	/**
 	 * Waits for this thread to finish. If this thread is already finished,
 	 * return immediately. This method must only be called once; the second call
@@ -321,8 +322,8 @@ public class KThread {
 			this.isJoined = true;
 			// print that the thread is being put to sleep
 			System.out.println("putting parent to sleep: " + currentThread.getName());
-			// put the child and parent thread into the hashmap
-			childParentThreadPairs.put(this, currentThread);
+			// store the parent, of the joined thread
+			this.currentParent = currentThread;
 			// put the thread to sleep, disabling the thread from running any further
 			currentThread.sleep();
 			// print that the parent is now awake
