@@ -146,7 +146,7 @@ public class Alarm {
 		});
 		child1.setName("child1").fork();
 
-		int duration2 = 100;
+		int duration2 = 1000;
 		long t2, t3;
 		t2 = Machine.timer().getTime();
 		ThreadedKernel.alarm.waitUntil(duration2);

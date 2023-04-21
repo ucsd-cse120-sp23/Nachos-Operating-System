@@ -1,5 +1,7 @@
 package nachos.threads;
 
+import java.util.HashMap;
+
 import nachos.machine.*;
 
 /**
@@ -200,6 +202,13 @@ public class KThread {
 		Lib.assertTrue(toBeDestroyed == null);
 		toBeDestroyed = currentThread;
 
+		// check to see if the child thread, if it is a child thread, has a parent, then set its parent to ready 
+		if(childParentThreadPairs.get(currentThread) != null){
+			// unblock the parent thread of the child
+			childParentThreadPairs.get(currentThread).ready();
+			childParentThreadPairs.remove(currentThread);
+		}
+
 		currentThread.status = statusFinished;
 
 		sleep();
@@ -277,6 +286,8 @@ public class KThread {
 	// boolean value to check if a thread has been called to be joined
 	private boolean isJoined = false;
 
+	// Hash Map that contains <Child, Parent> relationship, as a child can have at most one parent
+    private static HashMap<KThread, KThread> childParentThreadPairs = new HashMap<KThread, KThread>();
 	/**
 	 * Waits for this thread to finish. If this thread is already finished,
 	 * return immediately. This method must only be called once; the second call
@@ -285,28 +296,39 @@ public class KThread {
 	public void join() {
 		// a thread cannot call join() on itself
 		if (currentThread.compareTo(this) == 0) {
-			System.out.println("Cannot join self");
+			System.out.println("cannot join self");
+			Lib.assertTrue((currentThread.compareTo(this) == 0), "A thread cannot join self");
 			return;
 		}
 		// a thread cannot be joined more than once
-		if (this.isJoined == true) {
+		if (this.isJoined) {
 			// assert an error, as join has already been called
-			Lib.assertTrue((this.isJoined == true), "Error: " + this.name + " has already been joined!");
-			System.out.println("this thread has already been joined!");
+			Lib.assertTrue((this.isJoined), "Error: " + this.name + " has already been joined!");
+			System.out.println("Thread " + this.name + " has already been joined!");
 			return;
 		}
 		// if the status of the child is finished
 		if (this.status == statusFinished) {
 			// return without waiting
 			this.isJoined = true;
-			System.out.println("Thread is finished, joined!");
+			System.out.println("Thread " + this.name + " is finished, joined!");
 			return;
-		} else {
-			this.isJoined = true;
 			// the status of the child is not finished, so wait till it is
-			while (this.status != statusFinished){
-				System.out.println("waiting for child to finish...");
-			}
+		} else {
+			// disable interrupts from machine
+			Machine.interrupt().disable();
+			// set it to joined is true
+			this.isJoined = true;
+			// print that the thread is being put to sleep
+			System.out.println("putting parent to sleep: " + currentThread.getName());
+			// put the child and parent thread into the hashmap
+			childParentThreadPairs.put(this, currentThread);
+			// put the thread to sleep, disabling the thread from running any further
+			currentThread.sleep();
+			// print that the parent is now awake
+			System.out.println("parent: " + currentThread.getName() + " is awake and running!");
+			// reenable interrupts
+			Machine.interrupt().enable();
 		}
 		Lib.debug(dbgThread, "Joining to thread: " + toString());
 
@@ -448,9 +470,9 @@ public class KThread {
 		joinTest3();
 		System.out.println("----------TEST 4-------------");
 		joinTest4();
-		// System.out.println("----------TEST 5-------------");
-		// joinTest5(currentThread());
-		
+		System.out.println("----------TEST 5-------------");
+		joinTest5(currentThread());
+
 	}
 
 	private static final char dbgThread = 't';
@@ -529,23 +551,23 @@ public class KThread {
 
 	// test behavior for thread calling join on itself
 	private static void joinTest2(KThread thread) {
-		
+
 		try {
 			thread.join();
 			Lib.assertTrue((thread.isJoined == false), "Expected thread to not join on itself");
 		} catch (AssertionError e) {
-			System.out.println(e +  "Expected thread to not join on itself");
+			System.out.println(e + "Expected thread to not join on itself");
 		}
 	}
 
-	// thread can not call join more than once 
-	private static void joinTest3(){
+	// thread can not call join more than once
+	private static void joinTest3() {
 		KThread child1 = new KThread(new Runnable() {
 			public void run() {
 				System.out.println("I (heart) Nachos!");
 			}
 		});
-		child1.setName("child1").fork();	
+		child1.setName("child1").fork();
 
 		try {
 			child1.join();
@@ -553,12 +575,10 @@ public class KThread {
 		} catch (AssertionError e) {
 			System.out.println(e + "Check for assertion thread cannot call join more than once");
 		}
-	}	
-		
-		
+	}
 
 	// thread can call one to many joins
-	private static void joinTest4(){
+	private static void joinTest4() {
 		KThread child1 = new KThread(new Runnable() {
 			public void run() {
 				System.out.println("Thread 1");
@@ -577,7 +597,7 @@ public class KThread {
 		child1.setName("child1").fork();
 		child2.setName("child2").fork();
 		child3.setName("child3").fork();
-		
+
 		try {
 			child1.join();
 			child2.join();
@@ -587,8 +607,7 @@ public class KThread {
 		}
 	}
 
-	/*
-	private static void joinTest5(KThread thread){
+	private static void joinTest5(KThread thread) {
 		KThread child1 = new KThread(new Runnable() {
 			public void run() {
 				System.out.println("Thread 1");
@@ -596,12 +615,8 @@ public class KThread {
 		});
 		child1.setName("child1").fork();
 
-		thread.yield();
-
 		child1.join();
 
-		child1.finish();
-		
 	}
-	*/
+
 }
