@@ -101,8 +101,15 @@ public class Alarm {
 	 * @param thread the thread whose timer should be cancelled.
 	 */
 	public boolean cancel(KThread thread) {
-		// remove from list set Thread to ready
-		// if thread not found in the list, return false
+		// check to see if the thread is contained in the hasmap data structure
+		if(listOfThreads.containsKey(thread)) {
+			// remove it
+			listOfThreads.remove(thread);
+			// set it to ready
+			thread.ready();
+			return true;
+		}
+		// the thread has no timer set, so return false
 		return false;
 	}
 
