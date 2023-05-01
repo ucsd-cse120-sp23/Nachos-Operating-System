@@ -50,59 +50,45 @@ public class Rendezvous {
          * remove the waitingThread from waitMap if it exchanges with a second thread
          */
         WaitingThread currentThread;
+	// if the tag exists, exract it, else create an instance of it and insert it into the wait map
         if(!this.waitMap.containsKey(tag)){
             currentThread = new WaitingThread(value, false, this.lock);
             this.waitMap.put(tag, currentThread);
-            
         } else {
             currentThread = this.waitMap.get(tag);
         }
 
         int valueExchanged;
-        // a call excahnage a is in the hm
-        // b calls exchange b is not in the hm
+	// if the currentThread tag is already waiting enter
         if(!currentThread.isWaiting){
+	    // set  is waiting to true
             currentThread.isWaiting = true;
+	    // put the thread to sleep on the condition
             currentThread.condition.sleep();
-            // set return value to B's value
+	    // when awokem exchange its value
             valueExchanged = currentThread.value;
+	    // remove it from our wait map
             waitMap.remove(tag);
         } else {
-            valueExchanged = currentThread.value; // B has A
-            currentThread.value = value;          // A has B
+	    // exchange its value
+            valueExchanged = currentThread.value;
+            currentThread.value = value;
+	    // set the waiting of the thread to false
             currentThread.isWaiting = false;
+	    // wake up the thread that was waiting
             currentThread.condition.wake();
         }
-
-        /* 
-        int valueExchanged;
-        // check to see if a thread is waiting
-        if(!currentWaitingThread.isWaiting){ // run by thread A
-            // set the exchange value to value passed in
-            this.exchangeValue = value;
-            // set flag to signal that a thread is waiting for exchange to be called
-            this.isThreadWaiting = true;
-            // put the current waiting thread to sleep
-            //condition.sleep();
-            // once awake, set this threads value exchanged to the exchange value
-            valueExchanged = this.exchangeValue;
-        } else { // run by thread B
-            // get thread A's value
-            valueExchanged = this.exchangeValue;
-            // set the shared exchangeValue variable to thread B's value
-            this.exchangeValue = value;
-            // reset isThreadWaiting for the next pair of threads
-            this.isThreadWaiting = false;
-            // wake up thread A
-            //this.condition.wake();
-        }     
-        */
-
         // release the lock
         lock.release();
         // return the exchanged value
 	    return valueExchanged;
     }
+
+    /*
+     * This class is a simple data structure that holds a condition, a value and a boolean isWaiting value
+     * Which should dicatate if a previous thread called exchange. This data strucure hold no reference to any threads
+     * and does not violate our constraints. 
+     * */
 
     private class WaitingThread {
         public int value;

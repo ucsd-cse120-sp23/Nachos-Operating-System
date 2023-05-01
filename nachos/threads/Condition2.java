@@ -33,15 +33,19 @@ public class Condition2 {
 	 * reacquire the lock before <tt>sleep()</tt> returns.
 	 */
 	public void sleep() {
+		// disable interrupts
 		Machine.interrupt().disable();
+		// assert to see if the current thread hold the lock
 		Lib.assertTrue(conditionLock.isHeldByCurrentThread());
-
-		
+		// if it does, put the thread into the waiting queue
 		waitingQueue.add(KThread.currentThread());
-
+		// release the lock
 		conditionLock.release();
+		// put the current thread to sleep
 		KThread.currentThread().sleep();
+		// reacquire the lock
 		conditionLock.acquire();
+		// renable interrupts
 		Machine.interrupt().enable();
 
 	}
@@ -92,10 +96,13 @@ public class Condition2 {
 			Lib.assertTrue(conditionLock.isHeldByCurrentThread());
 			// disable interrupts to ensure atomicity
 			Machine.interrupt().disable();
+			// relase the lock
 			conditionLock.release();
+			// waitUntil the timeout, which puts the thread to sleep
 			ThreadedKernel.alarm.waitUntil(timeout);
-			
-
+			// should we be reacquiring the lock here???
+			//
+			// reenable interrupts
 			Machine.interrupt().enable();
 		}
 
