@@ -109,6 +109,8 @@ public class Alarm {
 			thread.ready();
 			return true;
 		}
+		// set it to ready
+		thread.ready();
 		// the thread has no timer set, so return false
 		return false;
 	}

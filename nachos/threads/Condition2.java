@@ -40,7 +40,7 @@ public class Condition2 {
 		waitingQueue.add(KThread.currentThread());
 
 		conditionLock.release();
-		// this.sleep();
+		KThread.currentThread().sleep();
 		conditionLock.acquire();
 		Machine.interrupt().enable();
 
@@ -60,9 +60,8 @@ public class Condition2 {
 			// Retrieve and remove the head thread of this queue
 			KThread threadToWake = waitingQueue.poll();
 			// If the thread to wake is also sleeping for a time, remove the thread from the alarm's queue
+            // wake the thread regardless
 			ThreadedKernel.alarm.cancel(threadToWake);
-			// wake the head thread
-			// threadToWake.ready();
 		}
 		// reenable interrupts
 		Machine.interrupt().enable();
