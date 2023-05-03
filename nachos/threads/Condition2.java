@@ -100,8 +100,8 @@ public class Condition2 {
 			conditionLock.release();
 			// waitUntil the timeout, which puts the thread to sleep
 			ThreadedKernel.alarm.waitUntil(timeout);
-			// should we be reacquiring the lock here???
-			//
+			// reacquire the lock
+		    conditionLock.acquire();
 			// reenable interrupts
 			Machine.interrupt().enable();
 		}
