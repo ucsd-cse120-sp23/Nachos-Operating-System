@@ -24,6 +24,17 @@ public class UserProcess {
 	 * Allocate a new process.
 	 */
 	public UserProcess() {
+		// creates a new ArrayList of file descriptors that are all comprised of null
+		// file descriptors
+		// has an initial capacity of 16 file descriptors
+		fileDescriptors = new OpenFile[this.MAX_FILE_TABLE_SIZE];
+
+		// Initialize file descriptors for stdin and stdout
+		// a file that can read this console.
+		fileDescriptors[0] = UserKernel.console.openForReading(); // File descriptor 0: stdin
+		// a file that can write this console.
+		fileDescriptors[1] = UserKernel.console.openForWriting(); // File descriptor 1: stdout
+
 		int numPhysPages = Machine.processor().getNumPhysPages();
 		pageTable = new TranslationEntry[numPhysPages];
 		for (int i = 0; i < numPhysPages; i++)
@@ -38,19 +49,19 @@ public class UserProcess {
 	 * @return a new process of the correct class.
 	 */
 	public static UserProcess newUserProcess() {
-	        String name = Machine.getProcessClassName ();
+		String name = Machine.getProcessClassName();
 
 		// If Lib.constructObject is used, it quickly runs out
 		// of file descriptors and throws an exception in
-		// createClassLoader.  Hack around it by hard-coding
+		// createClassLoader. Hack around it by hard-coding
 		// creating new processes of the appropriate type.
 
-		if (name.equals ("nachos.userprog.UserProcess")) {
-		    return new UserProcess ();
-		} else if (name.equals ("nachos.vm.VMProcess")) {
-		    return new VMProcess ();
+		if (name.equals("nachos.userprog.UserProcess")) {
+			return new UserProcess();
+		} else if (name.equals("nachos.vm.VMProcess")) {
+			return new VMProcess();
 		} else {
-		    return (UserProcess) Lib.constructObject(Machine.getProcessClassName());
+			return (UserProcess) Lib.constructObject(Machine.getProcessClassName());
 		}
 	}
 
@@ -94,11 +105,11 @@ public class UserProcess {
 	 * without including the null terminator. If no null terminator is found,
 	 * returns <tt>null</tt>.
 	 * 
-	 * @param vaddr the starting virtual address of the null-terminated string.
+	 * @param vaddr     the starting virtual address of the null-terminated string.
 	 * @param maxLength the maximum number of characters in the string, not
-	 * including the null terminator.
+	 *                  including the null terminator.
 	 * @return the string read, or <tt>null</tt> if no null terminator was
-	 * found.
+	 *         found.
 	 */
 	public String readVirtualMemoryString(int vaddr, int maxLength) {
 		Lib.assertTrue(maxLength >= 0);
@@ -120,7 +131,7 @@ public class UserProcess {
 	 * array. Same as <tt>readVirtualMemory(vaddr, data, 0, data.length)</tt>.
 	 * 
 	 * @param vaddr the first byte of virtual memory to read.
-	 * @param data the array where the data will be stored.
+	 * @param data  the array where the data will be stored.
 	 * @return the number of bytes successfully transferred.
 	 */
 	public int readVirtualMemory(int vaddr, byte[] data) {
@@ -134,11 +145,11 @@ public class UserProcess {
 	 * should return the number of bytes successfully copied (or zero if no data
 	 * could be copied).
 	 * 
-	 * @param vaddr the first byte of virtual memory to read.
-	 * @param data the array where the data will be stored.
+	 * @param vaddr  the first byte of virtual memory to read.
+	 * @param data   the array where the data will be stored.
 	 * @param offset the first byte to write in the array.
 	 * @param length the number of bytes to transfer from virtual memory to the
-	 * array.
+	 *               array.
 	 * @return the number of bytes successfully transferred.
 	 */
 	public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
@@ -162,7 +173,7 @@ public class UserProcess {
 	 * memory. Same as <tt>writeVirtualMemory(vaddr, data, 0, data.length)</tt>.
 	 * 
 	 * @param vaddr the first byte of virtual memory to write.
-	 * @param data the array containing the data to transfer.
+	 * @param data  the array containing the data to transfer.
 	 * @return the number of bytes successfully transferred.
 	 */
 	public int writeVirtualMemory(int vaddr, byte[] data) {
@@ -176,11 +187,11 @@ public class UserProcess {
 	 * should return the number of bytes successfully copied (or zero if no data
 	 * could be copied).
 	 * 
-	 * @param vaddr the first byte of virtual memory to write.
-	 * @param data the array containing the data to transfer.
+	 * @param vaddr  the first byte of virtual memory to write.
+	 * @param data   the array containing the data to transfer.
 	 * @param offset the first byte to transfer from the array.
 	 * @param length the number of bytes to transfer from the array to virtual
-	 * memory.
+	 *               memory.
 	 * @return the number of bytes successfully transferred.
 	 */
 	public int writeVirtualMemory(int vaddr, byte[] data, int offset, int length) {
@@ -220,8 +231,7 @@ public class UserProcess {
 
 		try {
 			coff = new Coff(executable);
-		}
-		catch (EOFException e) {
+		} catch (EOFException e) {
 			executable.close();
 			Lib.debug(dbgProcess, "\tcoff load failed");
 			return false;
@@ -347,8 +357,11 @@ public class UserProcess {
 		processor.writeRegister(Processor.regA1, argv);
 	}
 
-	/**
-	 * Handle the halt() system call.
+	/*
+	 * Halt the Nachos machine by calling Machine.halt(). Only the root process
+	 * (the first process, executed by UserKernel.run()) should be allowed to
+	 * execute this syscall. Any other process should ignore the syscall and return
+	 * immediately.
 	 */
 	private int handleHalt() {
 
@@ -359,10 +372,19 @@ public class UserProcess {
 	}
 
 	/**
-	 * Handle the exit() system call.
+	 * Terminate the current process immediately. Any open file descriptors
+	 * belonging to the process are closed. Any children of the process no longer
+	 * have a parent process.
+	 *
+	 * status is returned to the parent process as this process's exit status and
+	 * can be collected using the join syscall.
+	 *
+	 * exit() never returns.
+	 * 
+	 * void exit(int status);
 	 */
 	private int handleExit(int status) {
-	        // Do not remove this call to the autoGrader...
+		// Do not remove this call to the autoGrader...
 		Machine.autoGrader().finishingCurrentProcess(status);
 		// ...and leave it as the top of handleExit so that we
 		// can grade your implementation.
@@ -372,6 +394,188 @@ public class UserProcess {
 		Kernel.kernel.terminate();
 
 		return 0;
+	}
+
+	/**
+	 * Execute the program stored in the specified file, with the specified
+	 * arguments, in a new child process. The child process has a new unique
+	 * process ID, and starts with stdin opened as file descriptor 0, and stdout
+	 * opened as file descriptor 1.
+	 *
+	 * file is a null-terminated string that specifies the name of the file
+	 * containing the executable. Note that this string must include the ".coff"
+	 * extension.
+	 *
+	 * argc specifies the number of arguments to pass to the child process. This
+	 * number must be non-negative.
+	 *
+	 * argv is an array of pointers to null-terminated strings that represent the
+	 * arguments to pass to the child process. argv[0] points to the first
+	 * argument, and argv[argc-1] points to the last argument.
+	 *
+	 * exec() returns the child process's process ID, which can be passed to
+	 * join(). On error, returns -1.
+	 * 
+	 * int exec(char *file, int argc, char *argv[]);
+	 */
+	private int handleExec() {
+		return -1;
+	}
+
+	/**
+	 * Suspend execution of the current process until the child process specified
+	 * by the processID argument has exited. If the child has already exited by the
+	 * time of the call, returns immediately. When the current process resumes, it
+	 * disowns the child process, so that join() cannot be used on that process
+	 * again.
+	 *
+	 * processID is the process ID of the child process, returned by exec().
+	 *
+	 * status points to an integer where the exit status of the child process will
+	 * be stored. This is the value the child passed to exit(). If the child exited
+	 * because of an unhandled exception, the value stored is not defined.
+	 *
+	 * If the child exited normally, returns 1. If the child exited as a result of
+	 * an unhandled exception, returns 0. If processID does not refer to a child
+	 * process of the current process, returns -1.
+	 * 
+	 * int join(int processID, int *status);
+	 * 
+	 */
+	private int handleJoin() {
+		return -1;
+	}
+
+	/**
+	 * Attempt to open the named disk file, creating it if it does not exist,
+	 * and return a file descriptor that can be used to access the file. If
+	 * the file already exists, creat truncates it.
+	 *
+	 * Note that creat() can only be used to create files on disk; creat() will
+	 * never return a file descriptor referring to a stream.
+	 *
+	 * Returns the new file descriptor, or -1 if an error occurred.
+	 * 
+	 * int creat(char *name);
+	 * 
+	 */
+	private int handleCreate(string name) {
+		return -1;
+	}
+
+	/**
+	 * Attempt to open the named file and return a file descriptor.
+	 *
+	 * Note that open() can only be used to open files on disk; open() will never
+	 * return a file descriptor referring to a stream.
+	 *
+	 * Returns the new file descriptor, or -1 if an error occurred.
+	 * 
+	 * int open(char *name);
+	 */
+	private int handleOpen() {
+		return -1;
+	}
+
+	/**
+	 * Attempt to read up to count bytes into buffer from the file or stream
+	 * referred to by fileDescriptor.
+	 *
+	 * On success, the number of bytes read is returned. If the file descriptor
+	 * refers to a file on disk, the file position is advanced by this number.
+	 *
+	 * It is not necessarily an error if this number is smaller than the number of
+	 * bytes requested. If the file descriptor refers to a file on disk, this
+	 * indicates that the end of the file has been reached. If the file descriptor
+	 * refers to a stream, this indicates that the fewer bytes are actually
+	 * available right now than were requested, but more bytes may become available
+	 * in the future. Note that read() never waits for a stream to have more data;
+	 * it always returns as much as possible immediately.
+	 *
+	 * On error, -1 is returned, and the new file position is undefined. This can
+	 * happen if fileDescriptor is invalid, if part of the buffer is read-only or
+	 * invalid, or if a network stream has been terminated by the remote host and
+	 * no more data is available.
+	 * 
+	 * int read(int fileDescriptor, void *buffer, int count);
+	 */
+	private int handleRead() {
+		return -1;
+	}
+
+	/**
+	 * Attempt to write up to count bytes from buffer to the file or stream
+	 * referred to by fileDescriptor. write() can return before the bytes are
+	 * actually flushed to the file or stream. A write to a stream can block,
+	 * however, if kernel queues are temporarily full.
+	 *
+	 * On success, the number of bytes written is returned (zero indicates nothing
+	 * was written), and the file position is advanced by this number. It IS an
+	 * error if this number is smaller than the number of bytes requested. For
+	 * disk files, this indicates that the disk is full. For streams, this
+	 * indicates the stream was terminated by the remote host before all the data
+	 * was transferred.
+	 *
+	 * On error, -1 is returned, and the new file position is undefined. This can
+	 * happen if fileDescriptor is invalid, if part of the buffer is invalid, or
+	 * if a network stream has already been terminated by the remote host.
+	 * 
+	 * int write(int fileDescriptor, void *buffer, int count);
+	 */
+	private int handleWrite() {
+		return -1;
+	}
+
+	/**
+	 * Close a file descriptor, so that it no longer refers to any file or
+	 * stream and may be reused. The resources associated with the file
+	 * descriptor are released.
+	 *
+	 * Returns 0 on success, or -1 if an error occurred.
+	 * 
+	 * int close(int fileDescriptor);
+	 */
+	private int handleClose() {
+		return -1;
+	}
+
+	/**
+	 * Delete a file from the file system.
+	 *
+	 * If another process has the file open, the underlying file system
+	 * implementation in StubFileSystem will cleanly handle this situation
+	 * (this process will ask the file system to remove the file, but the
+	 * file will not actually be deleted by the file system until all
+	 * other processes are done with the file).
+	 *
+	 * Returns 0 on success, or -1 if an error occurred.
+	 * 
+	 * int unlink(char *name);
+	 */
+	private int handleUnlink() {
+		return -1;
+	}
+
+	/**
+	 * This method is sctrictly designed to acquire the index position of the next
+	 * available
+	 * file descriptor index if there is one avaialable
+	 * 
+	 * @return the index of the next available file descriptor
+	 */
+	private int getNextAvailableFileDescriptor() {
+		// extract the size of the file descriptor table, should be 16
+		int fileDescriptorTableSize = this.fileDescriptors.length;
+		// keep a local variable to the index of the next available file descriptor
+		int index;
+		for (index = 0; index < fileDescriptorTableSize; index++) {
+			if (this.fileDescriptors[index] == null) {
+				return index;
+			}
+		}
+
+		// if -1 is returned, there is no available space in our list
+		return -1;
 	}
 
 	private static final int syscallHalt = 0, syscallExit = 1, syscallExec = 2,
@@ -434,22 +638,53 @@ public class UserProcess {
 	 * </table>
 	 * 
 	 * @param syscall the syscall number.
-	 * @param a0 the first syscall argument.
-	 * @param a1 the second syscall argument.
-	 * @param a2 the third syscall argument.
-	 * @param a3 the fourth syscall argument.
-	 * @return the value to be returned to the user.
+	 * @param a0      the first syscall argument. // what is this exactly?
+	 * @param a1      the second syscall argument. // what is this exactly?
+	 * @param a2      the third syscall argument. // what is this exactly?
+	 * @param a3      the fourth syscall argument. // what is this exactly?
+	 * @return the value to be returned to the user. // what exactly do we return?
 	 */
 	public int handleSyscall(int syscall, int a0, int a1, int a2, int a3) {
+		// Implement the file system calls creat, open, read, write, close, and unlink
 		switch (syscall) {
-		case syscallHalt:
-			return handleHalt();
-		case syscallExit:
-			return handleExit(a0);
-
-		default:
-			Lib.debug(dbgProcess, "Unknown syscall " + syscall);
-			Lib.assertNotReached("Unknown system call!");
+			case syscallHalt:
+				// is void
+				return handleHalt();
+			case syscallExit:
+				// a0 represents the integer status
+				return handleExit(a0);
+			case syscallExec:
+				return -1;
+			case syscallJoin:
+				return -1;
+			// create system call to implement
+			case syscallCreate:
+				// a0 is the name of the file you wish to create
+				return handleCreate(a0);
+			// open system call to implement
+			case syscallOpen:
+				// a0 is the name of the file you wish to open
+				return handleOpen(a0);
+			// read system call to implement
+			case syscallRead:
+				// a0 filedescriptor, a1 buffer, a2 is the count
+				return handleRead(a0, a1, a2);
+			// write system call to implement
+			case syscallWrite:
+				// a0 filedescriptor, a1 buffer, a2 is the count
+				return handleWrite(a0, a1, a2);
+			// close system call to implement
+			case syscallClose:
+				// a0 is the file descriptor
+				return handleClose(a0);
+			// unlink system call to implement
+			case syscallUnlink:
+				// a0 is the name of the file
+				return handleUnlink(a0);
+			// the system call was not recognized
+			default:
+				Lib.debug(dbgProcess, "Unknown syscall " + syscall);
+				Lib.assertNotReached("Unknown system call!");
 		}
 		return 0;
 	}
@@ -465,20 +700,20 @@ public class UserProcess {
 		Processor processor = Machine.processor();
 
 		switch (cause) {
-		case Processor.exceptionSyscall:
-			int result = handleSyscall(processor.readRegister(Processor.regV0),
-					processor.readRegister(Processor.regA0),
-					processor.readRegister(Processor.regA1),
-					processor.readRegister(Processor.regA2),
-					processor.readRegister(Processor.regA3));
-			processor.writeRegister(Processor.regV0, result);
-			processor.advancePC();
-			break;
+			case Processor.exceptionSyscall:
+				int result = handleSyscall(processor.readRegister(Processor.regV0),
+						processor.readRegister(Processor.regA0),
+						processor.readRegister(Processor.regA1),
+						processor.readRegister(Processor.regA2),
+						processor.readRegister(Processor.regA3));
+				processor.writeRegister(Processor.regV0, result);
+				processor.advancePC();
+				break;
 
-		default:
-			Lib.debug(dbgProcess, "Unexpected exception: "
-					+ Processor.exceptionNames[cause]);
-			Lib.assertNotReached("Unexpected exception");
+			default:
+				Lib.debug(dbgProcess, "Unexpected exception: "
+						+ Processor.exceptionNames[cause]);
+				Lib.assertNotReached("Unexpected exception");
 		}
 	}
 
@@ -495,8 +730,14 @@ public class UserProcess {
 	protected final int stackPages = 8;
 
 	/** The thread that executes the user-level program. */
-        protected UThread thread;
-    
+	protected UThread thread;
+
+	// make a private fiinal variable containing the max file table size
+	private final int MAX_FILE_TABLE_SIZE = 16;
+
+	// list of available file descriptors
+	private OpenFile[] fileDescriptors;
+
 	private int initialPC, initialSP;
 
 	private int argc, argv;
