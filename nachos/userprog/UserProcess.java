@@ -418,7 +418,7 @@ public class UserProcess {
 	 * 
 	 * int exec(char *file, int argc, char *argv[]);
 	 */
-	private int handleExec() {
+	private int handleExec(int file, int argc, int argv) {
 		return -1;
 	}
 
@@ -442,7 +442,7 @@ public class UserProcess {
 	 * int join(int processID, int *status);
 	 * 
 	 */
-	private int handleJoin() {
+	private int handleJoin(int processID, int status) {
 		return -1;
 	}
 
@@ -459,7 +459,7 @@ public class UserProcess {
 	 * int creat(char *name);
 	 * 
 	 */
-	private int handleCreate(string name) {
+	private int handleCreate(int name) {
 		return -1;
 	}
 
@@ -473,7 +473,7 @@ public class UserProcess {
 	 * 
 	 * int open(char *name);
 	 */
-	private int handleOpen() {
+	private int handleOpen(int name) {
 		return -1;
 	}
 
@@ -499,7 +499,7 @@ public class UserProcess {
 	 * 
 	 * int read(int fileDescriptor, void *buffer, int count);
 	 */
-	private int handleRead() {
+	private int handleRead(int fileDescriptor, int buffer, int count) {
 		return -1;
 	}
 
@@ -522,7 +522,7 @@ public class UserProcess {
 	 * 
 	 * int write(int fileDescriptor, void *buffer, int count);
 	 */
-	private int handleWrite() {
+	private int handleWrite(int fileDescriptorm, int buffer, int count) {
 		return -1;
 	}
 
@@ -535,7 +535,7 @@ public class UserProcess {
 	 * 
 	 * int close(int fileDescriptor);
 	 */
-	private int handleClose() {
+	private int handleClose(int fileDescriptor) {
 		return -1;
 	}
 
@@ -552,7 +552,7 @@ public class UserProcess {
 	 * 
 	 * int unlink(char *name);
 	 */
-	private int handleUnlink() {
+	private int handleUnlink(int name) {
 		return -1;
 	}
 
@@ -564,11 +564,9 @@ public class UserProcess {
 	 * @return the index of the next available file descriptor
 	 */
 	private int getNextAvailableFileDescriptor() {
-		// extract the size of the file descriptor table, should be 16
-		int fileDescriptorTableSize = this.fileDescriptors.length;
 		// keep a local variable to the index of the next available file descriptor
 		int index;
-		for (index = 0; index < fileDescriptorTableSize; index++) {
+		for (index = 0; index < MAX_FILE_TABLE_SIZE; index++) {
 			if (this.fileDescriptors[index] == null) {
 				return index;
 			}
@@ -734,6 +732,9 @@ public class UserProcess {
 
 	// make a private fiinal variable containing the max file table size
 	private final int MAX_FILE_TABLE_SIZE = 16;
+
+	// make a private final variable contain the max string length for a buffer
+	private static final int MAX_STRING_LENGTH = 256;
 
 	// list of available file descriptors
 	private OpenFile[] fileDescriptors;
