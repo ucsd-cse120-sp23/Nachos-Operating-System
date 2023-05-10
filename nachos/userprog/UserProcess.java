@@ -553,7 +553,7 @@ public class UserProcess {
 		 * file descriptor array
 		 */
 		if (fileDescriptor < 0
-				|| fileDescriptor > MAX_FILE_TABLE_SIZE - 1
+				|| fileDescriptor >= MAX_FILE_TABLE_SIZE
 				|| fileDescriptors[fileDescriptor] == null) {
 			return -1;
 		}
@@ -611,7 +611,7 @@ public class UserProcess {
 		 * file descriptor array
 		 */
 		if (fileDescriptor < 0
-				|| fileDescriptor >= MAX_FILE_TABLE_SIZE - 1
+				|| fileDescriptor >= MAX_FILE_TABLE_SIZE
 				|| fileDescriptors[fileDescriptor] == null) {
 			return -1;
 		}
