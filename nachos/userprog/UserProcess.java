@@ -463,20 +463,20 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if(fileName == null){
+		if (fileName == null) {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
 		int availableFileDescriptor = getNextAvailableFileDescriptor();
-		// if no space exists inside our fileDescriptors array, then 
+		// if no space exists inside our fileDescriptors array, then
 		// we should throw an error return -1
-		if(availableFileDescriptor == -1){
+		if (availableFileDescriptor == -1) {
 			return -1;
 		}
 		// create a new file object by passing in the file name and the value true
 		OpenFile createdFile = ThreadedKernel.fileSystem.open(fileName, true);
 		// if the file was not opened, return an error
-		if(createdFile == null){
+		if (createdFile == null) {
 			return -1;
 		}
 		// put the created file in our fileDescriptor array
@@ -499,20 +499,20 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if(fileName == null){
+		if (fileName == null) {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
 		int availableFileDescriptor = getNextAvailableFileDescriptor();
-		// if no space exists inside our fileDescriptors array, then 
+		// if no space exists inside our fileDescriptors array, then
 		// we should throw an error return -1
-		if(availableFileDescriptor == -1){
+		if (availableFileDescriptor == -1) {
 			return -1;
 		}
 		// open a file object by passing in the file name and the value true
 		OpenFile openedFile = ThreadedKernel.fileSystem.open(fileName, false);
 		// if the file was not opened, return an error
-		if(openedFile == null){
+		if (openedFile == null) {
 			return -1;
 		}
 		// put the opened file in our fileDescriptor array
@@ -548,27 +548,27 @@ public class UserProcess {
 		// handleRead is in Progress *********************
 
 		/**
-		* check to see if the file descriptor is in a valid range,
-		* and check if the file descriptor actually contains a file in our
-		* file descriptor array
-		*/
-		if(fileDescriptor < 0 
-			|| fileDescriptor > MAX_FILE_TABLE_SIZE 
-			|| fileDescriptors[fileDescriptor] == null){
-				return -1;	
+		 * check to see if the file descriptor is in a valid range,
+		 * and check if the file descriptor actually contains a file in our
+		 * file descriptor array
+		 */
+		if (fileDescriptor < 0
+				|| fileDescriptor > MAX_FILE_TABLE_SIZE - 1
+				|| fileDescriptors[fileDescriptor] == null) {
+			return -1;
 		}
-		// bytes buffer 
+		// bytes buffer
 		byte[] byteBuffer = new byte[count];
 		// the file should be accessible, so access it using the fileDescriptor index
 		OpenFile fileToRead = fileDescriptors[fileDescriptor];
 		// checking if file position is valid
 		int pos = fileToRead.tell();
-		if(pos <= -1 || pos > fileToRead.length()){
+		if (pos <= -1 || pos > fileToRead.length()) {
 			return -1;
 		}
 		// return the number of bytes read
 		int bytesRead = fileToRead.read(pos, byteBuffer, 0, count);
-		
+
 		return bytesRead;
 	}
 
@@ -605,7 +605,23 @@ public class UserProcess {
 	 * int close(int fileDescriptor);
 	 */
 	private int handleClose(int fileDescriptor) {
-		return -1;
+		/**
+		 * check to see if the file descriptor is in a valid range,
+		 * and check if the file descriptor actually contains a file in our
+		 * file descriptor array
+		 */
+		if (fileDescriptor < 0
+				|| fileDescriptor >= MAX_FILE_TABLE_SIZE - 1
+				|| fileDescriptors[fileDescriptor] == null) {
+			return -1;
+		}
+		// Close a file descriptor, so that it no longer refers to any file or
+		// stream and may be reused.
+		fileDescriptors[fileDescriptor].close();
+		// set the current file object to null
+		fileDescriptors[fileDescriptor] = null;
+		// removal successful
+		return 0;
 	}
 
 	/**
@@ -622,7 +638,17 @@ public class UserProcess {
 	 * int unlink(char *name);
 	 */
 	private int handleUnlink(int name) {
-		return -1;
+		// Attempt to open the named disk file
+		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
+		// check if the file name is null, which indicates virtual memory is empty
+		if (fileName == null) {
+			return -1;
+		}
+		// attempt to Delete a file from the file system. If open, handled
+		// by the file system
+		boolean isFileRemoved = ThreadedKernel.fileSystem.remove(fileName);
+		// return 0 if the file was removed, else return -1
+		return (isFileRemoved ? 0 : -1);
 	}
 
 	/**
