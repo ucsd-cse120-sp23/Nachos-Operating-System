@@ -460,7 +460,29 @@ public class UserProcess {
 	 * 
 	 */
 	private int handleCreate(int name) {
-		return -1;
+		// Attempt to open the named disk file
+		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
+		// check if the file name is null, which indicates virtual memory is empty
+		if(fileName == null){
+			return -1;
+		}
+		// return a file descriptor that can be used to access the file
+		int availableFileDescriptor = getNextAvailableFileDescriptor();
+		// if no space exists inside our fileDescriptors array, then 
+		// we should throw an error return -1
+		if(availableFileDescriptor == -1){
+			return -1;
+		}
+		// create a new file object by passing in the file name and the value true
+		OpenFile createdFile = ThreadedKernel.fileSystem.open(fileName, true);
+		// if the file was not opened, return an error
+		if(createdFile == null){
+			return -1;
+		}
+		// put the created file in our fileDescriptor array
+		fileDescriptors[availableFileDescriptor] = createdFile;
+		// return the avialable file descriptor
+		return availableFileDescriptor;
 	}
 
 	/**
@@ -474,11 +496,33 @@ public class UserProcess {
 	 * int open(char *name);
 	 */
 	private int handleOpen(int name) {
-		return -1;
+		// Attempt to open the named disk file
+		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
+		// check if the file name is null, which indicates virtual memory is empty
+		if(fileName == null){
+			return -1;
+		}
+		// return a file descriptor that can be used to access the file
+		int availableFileDescriptor = getNextAvailableFileDescriptor();
+		// if no space exists inside our fileDescriptors array, then 
+		// we should throw an error return -1
+		if(availableFileDescriptor == -1){
+			return -1;
+		}
+		// open a file object by passing in the file name and the value true
+		OpenFile openedFile = ThreadedKernel.fileSystem.open(fileName, false);
+		// if the file was not opened, return an error
+		if(openedFile == null){
+			return -1;
+		}
+		// put the opened file in our fileDescriptor array
+		fileDescriptors[availableFileDescriptor] = openedFile;
+		// return the avialable file descriptor
+		return availableFileDescriptor;
 	}
 
 	/**
-	 * Attempt to read up to count bytes into buffer from the file or stream
+	 * Attempt to read up to "count" bytes into buffer from the file or stream
 	 * referred to by fileDescriptor.
 	 *
 	 * On success, the number of bytes read is returned. If the file descriptor
@@ -500,7 +544,32 @@ public class UserProcess {
 	 * int read(int fileDescriptor, void *buffer, int count);
 	 */
 	private int handleRead(int fileDescriptor, int buffer, int count) {
-		return -1;
+
+		// handleRead is in Progress *********************
+
+		/**
+		* check to see if the file descriptor is in a valid range,
+		* and check if the file descriptor actually contains a file in our
+		* file descriptor array
+		*/
+		if(fileDescriptor < 0 
+			|| fileDescriptor > MAX_FILE_TABLE_SIZE 
+			|| fileDescriptors[fileDescriptor] == null){
+				return -1;	
+		}
+		// bytes buffer 
+		byte[] byteBuffer = new byte[count];
+		// the file should be accessible, so access it using the fileDescriptor index
+		OpenFile fileToRead = fileDescriptors[fileDescriptor];
+		// checking if file position is valid
+		int pos = fileToRead.tell();
+		if(pos <= -1 || pos > fileToRead.length()){
+			return -1;
+		}
+		// return the number of bytes read
+		int bytesRead = fileToRead.read(pos, byteBuffer, 0, count);
+		
+		return bytesRead;
 	}
 
 	/**

@@ -1,7 +1,6 @@
 package nachos.threads;
 
 import java.util.*;
-import java.util.function.IntSupplier;
 import nachos.machine.*;
 
 /**
@@ -15,7 +14,7 @@ public class Future {
      * particular, the constructor should not block as a consequence
      * of invoking <i>function</i>.
      */
-    public Future (IntSupplier function) {
+    public Future (int function) {
     }
 
     /**
