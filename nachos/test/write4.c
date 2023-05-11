@@ -26,7 +26,7 @@ main ()
     prompt[2] = ' ';
     prompt[3] = '\0';
 
-    printf ("Enter up to 80 characters per line:\n");
+    printf ("Enter up to 80 characters per linealen");
     
     while (1) {
        // print the prompt

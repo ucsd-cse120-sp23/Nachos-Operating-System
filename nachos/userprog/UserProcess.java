@@ -463,7 +463,7 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if (fileName == null) {
+		if (fileName == null ||  fileName == "") {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
@@ -499,7 +499,7 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if (fileName == null) {
+		if (fileName == null || fileName == "") {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
@@ -544,8 +544,7 @@ public class UserProcess {
 	 * int read(int fileDescriptor, void *buffer, int count);
 	 */
 	private int handleRead(int fileDescriptor, int buffer, int count) {
-		/**
-		 * check to see if the file descriptor is in a valid range,
+		/**check to see if the file descriptor is in a valid range,
 		 * and check if the file descriptor actually contains a file in our
 		 * file descriptor array
 		 */
@@ -554,59 +553,59 @@ public class UserProcess {
 				|| fileDescriptors[fileDescriptor] == null) {
 			return -1;
 		}
-		
-		//checking for invalid count 
-		if (count < 0){
+		// checking for invalid count
+		if (count < 0) {
 			return -1;
-		} 
-
-		//checking for invalid buffer address
+		}
+		// checking for invalid buffer address
 		if (buffer < 0 || buffer > numPages * pageSize) {
 			return -1;
 		}
-
 		// bytes buffer
 		byte[] byteBuffer = new byte[pageSize];
 		// virtual address of buffer
 		int vaBuffer = buffer;
 		// total bytes to read and write to virtual memory
 		int bytesLeft = count;
-		// total bytes actually read 
+		// total bytes actually read
 		int totalBytesRead = 0;
-		// position in file to start reading from
-		int pos;
-		
+
 		// the file should be accessible, so access it using the fileDescriptor index
 		OpenFile fileToRead = fileDescriptors[fileDescriptor];
-		
-		// while still reading bytes from the file, for every page read, update the pos, virtual address
-		while(bytesLeft > 0) {
-			System.out.println("Read WHile loop,  COUNT: " + count);
-			System.out.println("Read While loop, bytes left: " + bytesLeft);
+
+		// while there are still bytes left to read from count
+		while (bytesLeft > 0) {
+
 			// determine to read the minimum between pageSize and bytesLeft
 			int bufferSize = Math.min(pageSize, bytesLeft);
-			// update position to start reading from
-			pos = fileToRead.tell();
-			// check if file position is valid
-			if (pos <= -1 || pos > fileToRead.length()) {
-				return -1;
-			}
+
 			// return the number of bytes read
-			int bytesRead = fileToRead.read(pos, byteBuffer, 0, bufferSize);
+			int bytesRead = fileToRead.read(byteBuffer, 0, bufferSize);
+
 			// check if read is valid
 			if (bytesRead == -1) {
 				return -1;
+			// or reached End of file break
+			} else if (bytesRead < bufferSize){
+			// update in case byteread > 0 but still < buff size 
+				totalBytesRead += bytesRead;
+				break;
 			}
 			// update total bytes read
 			totalBytesRead += bytesRead;
-			// check for valid vaBuffer 
+			// check for valid vaBuffer
 			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
 				return -1;
 			}
 			// write to virtual memory
 			int bytesWritten = writeVirtualMemory(vaBuffer, byteBuffer, 0, bytesRead);
-			// update the number of bytes left to read and the virtual address to write to
+			// checking for errors in writting in virtual memory
+			if(bytesWritten < bytesRead){
+				return -1;
+			}
+			// update the number of bytes left to read
 			bytesLeft -= bytesRead;
+			// the virtual address to write to
 			vaBuffer += bytesRead;
 		}
 		// return number of bytes read
@@ -633,8 +632,7 @@ public class UserProcess {
 	 * int write(int fileDescriptor, void *buffer, int count);
 	 */
 	private int handleWrite(int fileDescriptor, int buffer, int count) {
-		/**
-		 * check to see if the file descriptor is in a valid range,
+		/** check to see if the file descriptor is in a valid range,
 		 * and check if the file descriptor actually contains a file in our
 		 * file descriptor array
 		 */
@@ -643,13 +641,11 @@ public class UserProcess {
 				|| fileDescriptors[fileDescriptor] == null) {
 			return -1;
 		}
-		
-		//checking for invalid count 
-		if (count < 0){
+		// checking for invalid count
+		if (count < 0) {
 			return -1;
-		} 
-
-		//checking for invalid buffer address
+		}
+		// checking for invalid buffer address
 		if (buffer < 0 || buffer > numPages * pageSize) {
 			return -1;
 		}
@@ -660,42 +656,40 @@ public class UserProcess {
 		int vaBuffer = buffer;
 		// total bytes to read and write to virtual memory
 		int bytesLeft = count;
-		// total bytes actually written 
+		// total bytes actually written
 		int totalBytesWritten = 0;
-		// position in file to start reading from
-		int pos;
-		
+
 		// the file should be accessible, so access it using the fileDescriptor index
 		OpenFile fileToWrite = fileDescriptors[fileDescriptor];
-		// while still reading bytes from the file, for every page read, update the pos, virtual address
-		while(bytesLeft > 0 ) {
-			System.out.println("Write WHile loop,  COUNT: " + count);
-			System.out.println("Write WHile loop, bytes left: " + bytesLeft);
+		
+		// while there are still bytes left to write from count
+		while (bytesLeft > 0) {
+
 			// determine to write the minimum between pageSize and bytesLeft
 			int bufferSize = Math.min(pageSize, bytesLeft);
-			// check for valid vaBuffer 
+			// check for valid vaBuffer
 			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
 				return -1;
 			}
 			// read user buffer into the local buffer
 			int bytesRead = readVirtualMemory(vaBuffer, byteBuffer, 0, bufferSize);
-			// if no bytes were read then
-			pos = fileToWrite.tell();
-			// check if file position is valid
-			if (pos <= -1 || pos > fileToWrite.length()) {
-				return -1;
-			}
-			// write to file 
-			int bytesWritten = fileToWrite.write(pos, byteBuffer, 0, bytesRead);
+			
+			// write to file
+			int bytesWritten = fileToWrite.write(byteBuffer, 0, bytesRead);
 			// check if write is valid
-			if(bytesWritten == -1){
+			if (bytesWritten == -1) {
 				return -1;
 			}
-			// update the number of bytes left to write to the file, the virtual address to read from,
+			// update the number of bytes left to write to the file, the virtual address to
+			// read from,
 			// and update the total number of bytes written
 			bytesLeft -= bytesWritten;
 			vaBuffer += bytesWritten;
 			totalBytesWritten += bytesWritten;
+			// if we have reach the end of file, break out the loop
+			if((bytesWritten < bufferSize) || ( bytesWritten < bytesRead)){
+				break;
+			}
 		}
 		// return the total bytes written
 		return totalBytesWritten;
