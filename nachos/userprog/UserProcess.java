@@ -341,7 +341,6 @@ public class UserProcess {
 				// index i? since its for the section we are mapping no more than that
 				// unsure might need to check with TA
 				pageTable[i] = pageTableEntry;
-
 			}
 		}
 
@@ -353,8 +352,10 @@ public class UserProcess {
 	 */
 	protected void unloadSections() {
 		// update linked list data structure
+		int physPageNum;
 		for (int i = 0; i < numPages; i++){
-			UserKernel.deallocatePage(i);
+			physPageNum = pageTable[i].ppn;
+			UserKernel.deallocatePage(physPageNum);
 		}
 		// emptyout contents of page table
 		pageTable = null;
