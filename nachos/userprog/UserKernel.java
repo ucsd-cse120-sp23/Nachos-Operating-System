@@ -31,6 +31,8 @@ public class UserKernel extends ThreadedKernel {
 			}
 		});
 
+		// Initialize the free pages lock
+		freePagesLock = new Lock();
 		// initialize the freePages list with all available physical pages
 		initializePageLinkedList();
 	}
@@ -133,7 +135,7 @@ public class UserKernel extends ThreadedKernel {
 	private static LinkedList<Integer> freePhysicalPages = new LinkedList<Integer>();
 
 	// a static lock for free pages to make methods synchronous
-	private static Lock freePagesLock = new Lock();
+	private static Lock freePagesLock;
 
 	/**
 	 * This method initializes the linked list of free physical pages with the
@@ -153,8 +155,7 @@ public class UserKernel extends ThreadedKernel {
 
 	/**
 	 * This method allocates a page by removing a free page from our linked list of
-	 * free
-	 * pages. It does things synchronously.
+	 * free pages. It does things synchronously.
 	 * 
 	 * @return -1 if no page was allocated, else return a number greater than -1
 	 */
@@ -193,6 +194,5 @@ public class UserKernel extends ThreadedKernel {
 		freePagesLock.release();
 		// reenable interrupts
 		Machine.interrupt().enable();
-
 	}
 }
