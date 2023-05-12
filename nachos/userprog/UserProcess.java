@@ -309,7 +309,12 @@ public class UserProcess {
 			Lib.debug(dbgProcess, "\tinsufficient physical memory");
 			return false;
 		}
-
+		// allocate page table, size of pagetable should be numPages as 
+		// this is a linear style table
+		pageTable = new TranslationEntry[numPages];
+		boolean isRead;
+		TranslationEntry pageTableEntry;
+		int physPageNum;
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
@@ -321,7 +326,22 @@ public class UserProcess {
 				int vpn = section.getFirstVPN() + i;
 
 				// for now, just assume virtual addresses=physical addresses
+				// this function loads page from segment into physical memory
 				section.loadPage(i, vpn);
+				// check if we have physical page available to allocate 
+				physPageNum = UserKernel.allocatePage(); 
+				if (physPageNum == -1){
+					return false;
+				}
+				isRead = section.isReadOnly();
+				// create new table entry ,unsure if these are correct args
+				// they say vpn == ppn (line 328)so should we pass in both args? or different ints
+				pageTableEntry =  new TranslationEntry(vpn,physPageNum,true,isRead,false,false);
+				// insert into page table
+				// index i? since its for the section we are mapping no more than that
+				// unsure might need to check with TA
+				pageTable[i] = pageTableEntry;
+
 			}
 		}
 
@@ -332,6 +352,12 @@ public class UserProcess {
 	 * Release any resources allocated by <tt>loadSections()</tt>.
 	 */
 	protected void unloadSections() {
+		// update linked list data structure
+		for (int i = 0; i < numPages; i++){
+			UserKernel.deallocatePage(i);
+		}
+		// emptyout contents of page table
+		pageTable = null;
 	}
 
 	/**

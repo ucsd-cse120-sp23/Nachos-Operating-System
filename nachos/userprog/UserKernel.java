@@ -143,6 +143,7 @@ public class UserKernel extends ThreadedKernel {
 	 * processor
 	 */
 	public static void initializePageLinkedList() {
+		freePagesLock = new Lock();
 		// get the number of physical pages
 		int numPhysPages = Machine.processor().getNumPhysPages();
 		// initialize the linked list of free physical pages with the number of
@@ -164,7 +165,6 @@ public class UserKernel extends ThreadedKernel {
 		int page = -1;
 		// Be sure to use synchronization where necessary when accessing this list to
 		// prevent race conditions.
-		Machine.interrupt().disable();
 		// acquire the lock
 		freePagesLock.acquire();
 		if (!freePhysicalPages.isEmpty()) {
@@ -173,7 +173,6 @@ public class UserKernel extends ThreadedKernel {
 		// release the lock
 		freePagesLock.release();
 		// reenable interrupts
-		Machine.interrupt().enable();
 		return page;
 	}
 
@@ -185,7 +184,6 @@ public class UserKernel extends ThreadedKernel {
 	 */
 	public static void deallocatePage(int page) {
 		// disable interrupts
-		Machine.interrupt().disable();
 		// acquire the lock
 		freePagesLock.acquire();
 		// add a page to the linked list
@@ -193,6 +191,5 @@ public class UserKernel extends ThreadedKernel {
 		// release the lock
 		freePagesLock.release();
 		// reenable interrupts
-		Machine.interrupt().enable();
 	}
 }
