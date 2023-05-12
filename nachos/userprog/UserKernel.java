@@ -3,6 +3,7 @@ package nachos.userprog;
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
+import java.util.LinkedList;
 
 /**
  * A kernel that can support multiple user processes.
@@ -29,6 +30,9 @@ public class UserKernel extends ThreadedKernel {
 				exceptionHandler();
 			}
 		});
+
+		// initialize the freePages list with all available physical pages
+		initializePageLinkedList();
 	}
 
 	/**
@@ -97,15 +101,15 @@ public class UserKernel extends ThreadedKernel {
 
 		String shellProgram = Machine.getShellProgramName();
 		if (!process.execute(shellProgram, new String[] {})) {
-		    System.out.println ("Could not find executable '" +
+			System.out.println("Could not find executable '" +
 					shellProgram + "', trying '" +
 					shellProgram + ".coff' instead.");
-		    shellProgram += ".coff";
-		    if (!process.execute(shellProgram, new String[] {})) {
-			System.out.println ("Also could not find '" +
-					    shellProgram + "', aborting.");
-			Lib.assertTrue(false);
-		    }
+			shellProgram += ".coff";
+			if (!process.execute(shellProgram, new String[] {})) {
+				System.out.println("Also could not find '" +
+						shellProgram + "', aborting.");
+				Lib.assertTrue(false);
+			}
 
 		}
 
@@ -124,4 +128,71 @@ public class UserKernel extends ThreadedKernel {
 
 	// dummy variables to make javac smarter
 	private static Coff dummy1 = null;
+
+	// a static linked list of free physical pages
+	private static LinkedList<Integer> freePhysicalPages = new LinkedList<Integer>();
+
+	// a static lock for free pages to make methods synchronous
+	private static Lock freePagesLock = new Lock();
+
+	/**
+	 * This method initializes the linked list of free physical pages with the
+	 * number of pages of physical memory attached to the simulated
+	 * processor
+	 */
+	public static void initializePageLinkedList() {
+		// get the number of physical pages
+		int numPhysPages = Machine.processor().getNumPhysPages();
+		// initialize the linked list of free physical pages with the number of
+		// of pages of physical memory attached to this simulated processor.
+		for (int index = 0; index < numPhysPages; index++) {
+			// add the page
+			freePhysicalPages.add(index);
+		}
+	}
+
+	/**
+	 * This method allocates a page by removing a free page from our linked list of
+	 * free
+	 * pages. It does things synchronously.
+	 * 
+	 * @return -1 if no page was allocated, else return a number greater than -1
+	 */
+	public static int allocatePage() {
+		// we will return -1 if no page was allocated
+		int page = -1;
+		// Be sure to use synchronization where necessary when accessing this list to
+		// prevent race conditions.
+		Machine.interrupt().disable();
+		// acquire the lock
+		freePagesLock.acquire();
+		if (!freePhysicalPages.isEmpty()) {
+			page = freePhysicalPages.removeFirst();
+		}
+		// release the lock
+		freePagesLock.release();
+		// reenable interrupts
+		Machine.interrupt().enable();
+		return page;
+	}
+
+	/**
+	 * This method deallocates page by adding a free page to our linked list of free
+	 * pages.
+	 * 
+	 * @param page number of page that is free
+	 */
+	public static void deallocatePage(int page) {
+		// disable interrupts
+		Machine.interrupt().disable();
+		// acquire the lock
+		freePagesLock.acquire();
+		// add a page to the linked list
+		freePhysicalPages.add(page);
+		// release the lock
+		freePagesLock.release();
+		// reenable interrupts
+		Machine.interrupt().enable();
+
+	}
 }
