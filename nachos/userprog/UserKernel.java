@@ -132,7 +132,7 @@ public class UserKernel extends ThreadedKernel {
 	private static Coff dummy1 = null;
 
 	// a static linked list of free physical pages
-	private static LinkedList<Integer> freePhysicalPages = new LinkedList<Integer>();
+	private static LinkedList<Integer> freePhysicalPages;
 
 	// a static lock for free pages to make methods synchronous
 	private static Lock freePagesLock;
@@ -143,6 +143,8 @@ public class UserKernel extends ThreadedKernel {
 	 * processor
 	 */
 	public static void initializePageLinkedList() {
+		// make a new linked list of all free physical pages
+		freePhysicalPages = new LinkedList<Integer>();
 		// get the number of physical pages
 		int numPhysPages = Machine.processor().getNumPhysPages();
 		// initialize the linked list of free physical pages with the number of
@@ -185,5 +187,9 @@ public class UserKernel extends ThreadedKernel {
 		freePhysicalPages.add(page);
 		// release the lock
 		freePagesLock.release();
+	}
+
+	public static int getNumOfFreePages() {
+		return freePhysicalPages.size();
 	}
 }

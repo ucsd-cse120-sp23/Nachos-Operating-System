@@ -76,7 +76,6 @@ public class UserProcess {
 	public boolean execute(String name, String[] args) {
 		if (!load(name, args))
 			return false;
-
 		thread = new UThread(this);
 		thread.setName(name).fork();
 
@@ -153,19 +152,50 @@ public class UserProcess {
 	 * @return the number of bytes successfully transferred.
 	 */
 	public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
-		Lib.assertTrue(offset >= 0 && length >= 0
-				&& offset + length <= data.length);
+		Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
 
 		byte[] memory = Machine.processor().getMemory();
+		
+		// make copies of the virtual address and offset
+		int currVaddr = vaddr;
+		int currOffset = offset;
+		// set a local for the total number of bytes read
+		int totalBytesRead = 0;
+		// set bytes to read to the length
+		int bytesToRead = length;
 
-		// for now, just assume that virtual addresses equal physical addresses
-		if (vaddr < 0 || vaddr >= memory.length)
-			return 0;
+		// adress translation for bytes to read
+		while (bytesToRead > 0) {
+			// get VPN from address
+			int virtualPageNum = Processor.pageFromAddress(currVaddr);
+	
+			// check if the virtual page number is not out of bounds 
+			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
+				break;
+			}
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(memory, vaddr, data, offset, amount);
+			//  get offset from address
+			int vaOffset = Processor.offsetFromAddress(currVaddr);
+			//  get ppn fron vpn  
+			int physicalPageNum = pageTable[virtualPageNum].ppn;
+			// check of physical page num is not out of bounds
+			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
+				break;
+			}
+			// compute physical address 
+			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
+			// max ammount of single copy
+			int bytesRead = Math.min(length, pageSize - vaOffset);
+			System.arraycopy(memory, physicalAddr, data, currOffset, bytesRead);
 
-		return amount;
+			// update the byte data, address data and offset date
+			currVaddr += bytesRead;
+			currOffset += bytesRead;
+			totalBytesRead += bytesRead;
+			bytesToRead -= bytesRead;
+		}
+		// return the total number of bytes that were successfully read
+		return totalBytesRead;
 	}
 
 	/**
@@ -199,15 +229,47 @@ public class UserProcess {
 				&& offset + length <= data.length);
 
 		byte[] memory = Machine.processor().getMemory();
+		
+		// make copies of the virtual address and offset
+		int currVaddr = vaddr;
+		int currOffset = offset;
+		// set a local for the total number of bytes read
+		int totalBytesWritten = 0;
+		// set bytes to read to the length
+		int bytesToWrite = length;
+		// adress translation for bytes to read
+		while (bytesToWrite > 0) {
+			// get VPN from address
+			int virtualPageNum = Processor.pageFromAddress(currVaddr);
+			// check if the virtual page number is not out of bounds 
+			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
+				break;
+			}
 
-		// for now, just assume that virtual addresses equal physical addresses
-		if (vaddr < 0 || vaddr >= memory.length)
-			return 0;
+			//  get offset from address
+			int vaOffset = Processor.offsetFromAddress(currVaddr);
+			//  get ppn fron vpn  
+			int physicalPageNum = pageTable[virtualPageNum].ppn;
 
-		int amount = Math.min(length, memory.length - vaddr);
-		System.arraycopy(data, offset, memory, vaddr, amount);
+			// check of physical page num is not out of bounds
+			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
+				break;
+			}
+			// compute physical address 
+			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
+			// max amount of single copy
+			int bytesWritten = Math.min(length, pageSize - vaOffset);
+			System.arraycopy(data, currOffset, memory, physicalAddr, bytesWritten);
 
-		return amount;
+			// update the byte data, address data and offset date
+			currVaddr += bytesWritten;
+			currOffset += bytesWritten;
+			totalBytesWritten += bytesWritten;
+			bytesToWrite -= bytesWritten;
+		}
+
+		// return the total number of bytes that were successfully written
+		return totalBytesWritten;
 	}
 
 	/**
@@ -272,7 +334,6 @@ public class UserProcess {
 
 		// and finally reserve 1 page for arguments
 		numPages++;
-
 		if (!loadSections())
 			return false;
 
@@ -304,7 +365,8 @@ public class UserProcess {
 	 * @return <tt>true</tt> if the sections were successfully loaded.
 	 */
 	protected boolean loadSections() {
-		if (numPages > Machine.processor().getNumPhysPages()) {
+		// Machine.processor().getNumPhysPages() --> removed
+		if (numPages > UserKernel.getNumOfFreePages()) {
 			coff.close();
 			Lib.debug(dbgProcess, "\tinsufficient physical memory");
 			return false;
@@ -312,36 +374,65 @@ public class UserProcess {
 		// allocate page table, size of pagetable should be numPages as 
 		// this is a linear style table
 		pageTable = new TranslationEntry[numPages];
-		boolean isRead;
+		// boolean isReadable variable for if the section is readable
+		boolean isReadable;
+		// page table entry reference 
 		TranslationEntry pageTableEntry;
+		// physical page number reference
 		int physPageNum;
+		int pagesPSection = 0 ;
+		int vpn = 0;
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
-
+		
 			Lib.debug(dbgProcess, "\tinitializing " + section.getName()
 					+ " section (" + section.getLength() + " pages)");
 
 			for (int i = 0; i < section.getLength(); i++) {
-				int vpn = section.getFirstVPN() + i;
-
-				// for now, just assume virtual addresses=physical addresses
-				// this function loads page from segment into physical memory
-				section.loadPage(i, vpn);
-				// check if we have physical page available to allocate 
-				physPageNum = UserKernel.allocatePage(); 
-				if (physPageNum == -1){
+				// get the virtual page number
+				vpn = section.getFirstVPN() + i;
+				// check if vpn is within bounds of memory
+				if (vpn < 0 || vpn >= numPages) {
 					return false;
 				}
-				isRead = section.isReadOnly();
-				// create new table entry ,unsure if these are correct args
-				// they say vpn == ppn (line 328)so should we pass in both args? or different ints
-				pageTableEntry =  new TranslationEntry(vpn,physPageNum,true,isRead,false,false);
-				// insert into page table
-				// index i? since its for the section we are mapping no more than that
-				// unsure might need to check with TA
-				pageTable[i] = pageTableEntry;
+				
+				// allocate a physical page
+				physPageNum = UserKernel.allocatePage();
+				// check if the physical page was allocated 
+				if (physPageNum == -1) {
+					return false;
+				}				
+				// set if the page isReadable according to the section constraint
+				isReadable = section.isReadOnly();		
+				// create new table entry
+				pageTableEntry =  new TranslationEntry(vpn, physPageNum, true, isReadable, false, false);
+				// insert the entry into the page table
+				pageTable[vpn] = pageTableEntry;
+				// load page into physical memory
+				pagesPSection ++;
+				section.loadPage(i, physPageNum);
 			}
+	
+			
+		}		
+		// reserve pages for stack and args
+		for(int i = 0; i < stackPages + 1; i ++ ){
+			// vpns are contigous so keep incrementing where previous value left off
+			vpn ++;
+			if (vpn < 0 || vpn >= numPages) {
+				return false;
+			}			
+			// allocate a physical page
+			physPageNum = UserKernel.allocatePage();
+			// check if the physical page was allocated 
+			if (physPageNum == -1) {
+				return false;
+			}			
+			// create new table entry
+			pageTableEntry =  new TranslationEntry(vpn, physPageNum, true, false, false, false);
+			// insert the entry into the page table
+			pageTable[vpn] = pageTableEntry;
 		}
 
 		return true;
@@ -353,12 +444,13 @@ public class UserProcess {
 	protected void unloadSections() {
 		// update linked list data structure
 		int physPageNum;
-		for (int i = 0; i < numPages; i++){
+		for (int i = 0; i < numPages; i++) {
 			physPageNum = pageTable[i].ppn;
 			UserKernel.deallocatePage(physPageNum);
+			pageTable[i] = null;
 		}
-		// emptyout contents of page table
-		pageTable = null;
+		// empty out contents of page table
+		//pageTable = null;
 	}
 
 	/**
