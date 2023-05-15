@@ -27,7 +27,7 @@ public class UserProcess {
 		// creates a new ArrayList of file descriptors that are all comprised of null
 		// file descriptors
 		// has an initial capacity of 16 file descriptors
-		fileDescriptors = new OpenFile[this.MAX_FILE_TABLE_SIZE];
+		fileDescriptors = new OpenFile[MAX_FILE_TABLE_SIZE];
 
 		// Initialize file descriptors for stdin and stdout
 		// a file that can read this console.
@@ -155,7 +155,7 @@ public class UserProcess {
 		Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
 
 		byte[] memory = Machine.processor().getMemory();
-		
+
 		// make copies of the virtual address and offset
 		int currVaddr = vaddr;
 		int currOffset = offset;
@@ -165,27 +165,32 @@ public class UserProcess {
 		int bytesToRead = length;
 
 		// adress translation for bytes to read
-		while (bytesToRead > 0) {
+		while (bytesToRead > 0 && currOffset < data.length) {
 			// get VPN from address
 			int virtualPageNum = Processor.pageFromAddress(currVaddr);
-	
-			// check if the virtual page number is not out of bounds 
+
+			// check if the virtual page number is not out of bounds
 			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
 				break;
 			}
 
-			//  get offset from address
+			// get offset from address
 			int vaOffset = Processor.offsetFromAddress(currVaddr);
-			//  get ppn fron vpn  
+			// get ppn fron vpn
 			int physicalPageNum = pageTable[virtualPageNum].ppn;
 			// check of physical page num is not out of bounds
 			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
 				break;
 			}
-			// compute physical address 
+			// compute physical address
 			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
 			// max ammount of single copy
-			int bytesRead = Math.min(length, pageSize - vaOffset);
+			// int bytesRead = Math.min(bytesToRead, pageSize - vaOffset); //
+			// Math.min(length, pageSize - vaOffset);
+			// Adjust the number of bytes to read based on the remaining length of the
+			// destination array
+			int remainingLength = data.length - currOffset;
+			int bytesRead = Math.min(bytesToRead, Math.min(pageSize - vaOffset, remainingLength));
 			System.arraycopy(memory, physicalAddr, data, currOffset, bytesRead);
 
 			// update the byte data, address data and offset date
@@ -229,7 +234,7 @@ public class UserProcess {
 				&& offset + length <= data.length);
 
 		byte[] memory = Machine.processor().getMemory();
-		
+
 		// make copies of the virtual address and offset
 		int currVaddr = vaddr;
 		int currOffset = offset;
@@ -238,27 +243,32 @@ public class UserProcess {
 		// set bytes to read to the length
 		int bytesToWrite = length;
 		// adress translation for bytes to read
-		while (bytesToWrite > 0) {
+		while (bytesToWrite > 0 && currOffset < data.length) {
 			// get VPN from address
 			int virtualPageNum = Processor.pageFromAddress(currVaddr);
-			// check if the virtual page number is not out of bounds 
+			// check if the virtual page number is not out of bounds
 			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
 				break;
 			}
 
-			//  get offset from address
+			// get offset from address
 			int vaOffset = Processor.offsetFromAddress(currVaddr);
-			//  get ppn fron vpn  
+			// get ppn fron vpn
 			int physicalPageNum = pageTable[virtualPageNum].ppn;
 
 			// check of physical page num is not out of bounds
 			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
 				break;
 			}
-			// compute physical address 
+			// compute physical address
 			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
 			// max amount of single copy
-			int bytesWritten = Math.min(length, pageSize - vaOffset);
+			// int bytesWritten = Math.min(bytesToWrite, pageSize - vaOffset); //
+			// Math.min(length, pageSize - vaOffset);
+			// Adjust the number of bytes to read based on the remaining length of the
+			// destination array
+			int remainingLength = data.length - currOffset;
+			int bytesWritten = Math.min(bytesToWrite, Math.min(pageSize - vaOffset, remainingLength));
 			System.arraycopy(data, currOffset, memory, physicalAddr, bytesWritten);
 
 			// update the byte data, address data and offset date
@@ -371,21 +381,21 @@ public class UserProcess {
 			Lib.debug(dbgProcess, "\tinsufficient physical memory");
 			return false;
 		}
-		// allocate page table, size of pagetable should be numPages as 
+		// allocate page table, size of pagetable should be numPages as
 		// this is a linear style table
 		pageTable = new TranslationEntry[numPages];
 		// boolean isReadable variable for if the section is readable
 		boolean isReadable;
-		// page table entry reference 
+		// page table entry reference
 		TranslationEntry pageTableEntry;
 		// physical page number reference
 		int physPageNum;
-		int pagesPSection = 0 ;
+		int pagesPSection = 0;
 		int vpn = 0;
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
-		
+
 			Lib.debug(dbgProcess, "\tinitializing " + section.getName()
 					+ " section (" + section.getLength() + " pages)");
 
@@ -396,41 +406,39 @@ public class UserProcess {
 				if (vpn < 0 || vpn >= numPages) {
 					return false;
 				}
-				
+
 				// allocate a physical page
 				physPageNum = UserKernel.allocatePage();
-				// check if the physical page was allocated 
+				// check if the physical page was allocated
 				if (physPageNum == -1) {
 					return false;
-				}				
+				}
 				// set if the page isReadable according to the section constraint
-				isReadable = section.isReadOnly();		
+				isReadable = section.isReadOnly();
 				// create new table entry
-				pageTableEntry =  new TranslationEntry(vpn, physPageNum, true, isReadable, false, false);
+				pageTableEntry = new TranslationEntry(vpn, physPageNum, true, isReadable, false, false);
 				// insert the entry into the page table
 				pageTable[vpn] = pageTableEntry;
 				// load page into physical memory
-				pagesPSection ++;
+				pagesPSection++;
 				section.loadPage(i, physPageNum);
 			}
-	
-			
-		}		
+		}
 		// reserve pages for stack and args
-		for(int i = 0; i < stackPages + 1; i ++ ){
+		for (int i = 0; i < stackPages + 1; i++) {
 			// vpns are contigous so keep incrementing where previous value left off
-			vpn ++;
+			vpn++;
 			if (vpn < 0 || vpn >= numPages) {
 				return false;
-			}			
+			}
 			// allocate a physical page
 			physPageNum = UserKernel.allocatePage();
-			// check if the physical page was allocated 
+			// check if the physical page was allocated
 			if (physPageNum == -1) {
 				return false;
-			}			
+			}
 			// create new table entry
-			pageTableEntry =  new TranslationEntry(vpn, physPageNum, true, false, false, false);
+			pageTableEntry = new TranslationEntry(vpn, physPageNum, true, false, false, false);
 			// insert the entry into the page table
 			pageTable[vpn] = pageTableEntry;
 		}
@@ -450,7 +458,7 @@ public class UserProcess {
 			pageTable[i] = null;
 		}
 		// empty out contents of page table
-		//pageTable = null;
+		// pageTable = null;
 	}
 
 	/**
@@ -582,7 +590,7 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if (fileName == null ||  fileName == "") {
+		if (fileName == null || fileName == "") {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
@@ -663,7 +671,8 @@ public class UserProcess {
 	 * int read(int fileDescriptor, void *buffer, int count);
 	 */
 	private int handleRead(int fileDescriptor, int buffer, int count) {
-		/**check to see if the file descriptor is in a valid range,
+		/**
+		 * check to see if the file descriptor is in a valid range,
 		 * and check if the file descriptor actually contains a file in our
 		 * file descriptor array
 		 */
@@ -680,6 +689,12 @@ public class UserProcess {
 		if (buffer < 0 || buffer > numPages * pageSize) {
 			return -1;
 		}
+
+		// Check if the buffer address and size exceed the address space
+		if (buffer + count > numPages * pageSize) {
+			return -1;
+		}
+
 		// bytes buffer
 		byte[] byteBuffer = new byte[pageSize];
 		// virtual address of buffer
@@ -704,22 +719,22 @@ public class UserProcess {
 			// check if read is valid
 			if (bytesRead == -1) {
 				return -1;
-			// or reached End of file break
-			} else if (bytesRead < bufferSize){
-			// update in case byteread > 0 but still < buff size 
+				// or reached End of file break
+			} else if (bytesRead < bufferSize) {
+				// update in case byteread > 0 but still < buff size
 				totalBytesRead += bytesRead;
 				break;
 			}
 			// update total bytes read
 			totalBytesRead += bytesRead;
 			// check for valid vaBuffer
-			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
+			if (vaBuffer < 0 || vaBuffer >= numPages * pageSize) {
 				return -1;
 			}
 			// write to virtual memory
 			int bytesWritten = writeVirtualMemory(vaBuffer, byteBuffer, 0, bytesRead);
 			// checking for errors in writting in virtual memory
-			if(bytesWritten < bytesRead){
+			if (bytesWritten < bytesRead) {
 				return -1;
 			}
 			// update the number of bytes left to read
@@ -751,7 +766,8 @@ public class UserProcess {
 	 * int write(int fileDescriptor, void *buffer, int count);
 	 */
 	private int handleWrite(int fileDescriptor, int buffer, int count) {
-		/** check to see if the file descriptor is in a valid range,
+		/**
+		 * check to see if the file descriptor is in a valid range,
 		 * and check if the file descriptor actually contains a file in our
 		 * file descriptor array
 		 */
@@ -765,7 +781,12 @@ public class UserProcess {
 			return -1;
 		}
 		// checking for invalid buffer address
-		if (buffer < 0 || buffer > numPages * pageSize) {
+		if (buffer < 0 || buffer >= numPages * pageSize) {
+			return -1;
+		}
+
+		// Check if the buffer address and size exceed the address space
+		if (buffer + count > numPages * pageSize) {
 			return -1;
 		}
 
@@ -780,19 +801,19 @@ public class UserProcess {
 
 		// the file should be accessible, so access it using the fileDescriptor index
 		OpenFile fileToWrite = fileDescriptors[fileDescriptor];
-		
+
 		// while there are still bytes left to write from count
 		while (bytesLeft > 0) {
 
 			// determine to write the minimum between pageSize and bytesLeft
 			int bufferSize = Math.min(pageSize, bytesLeft);
 			// check for valid vaBuffer
-			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
+			if (vaBuffer < 0 || vaBuffer >= numPages * pageSize) {
 				return -1;
 			}
 			// read user buffer into the local buffer
 			int bytesRead = readVirtualMemory(vaBuffer, byteBuffer, 0, bufferSize);
-			
+
 			// write to file
 			int bytesWritten = fileToWrite.write(byteBuffer, 0, bytesRead);
 			// check if write is valid
@@ -806,7 +827,7 @@ public class UserProcess {
 			vaBuffer += bytesWritten;
 			totalBytesWritten += bytesWritten;
 			// if we have reach the end of file, break out the loop
-			if((bytesWritten < bufferSize) || ( bytesWritten < bytesRead)){
+			if ((bytesWritten < bufferSize) || (bytesWritten < bytesRead)) {
 				break;
 			}
 		}
