@@ -6,6 +6,7 @@ import nachos.userprog.*;
 import nachos.vm.*;
 
 import java.io.EOFException;
+import java.util.LinkedList;
 
 /**
  * Encapsulates the state of a user process that is not contained in its user
@@ -24,6 +25,19 @@ public class UserProcess {
 	 * Allocate a new process.
 	 */
 	public UserProcess() {
+		// assign PID, synchronization supported
+		assignCurrentPIDLock.acquire(); // // acquire the lock before assigning PID
+		setCurrentID(getNextAvailablePID()); // assign a PID to the current process
+		// check against the first root process for exit
+		// only two cases, a process is the root, or it is not
+		if(!rootProcessCreated){
+			isRootProcess = true;
+			rootProcessCreated = true;
+		} else {
+			isRootProcess = false;
+		}
+		assignCurrentPIDLock.release(); // release the lock after assigning PID
+
 		// creates a new ArrayList of file descriptors that are all comprised of null
 		// file descriptors
 		// has an initial capacity of 16 file descriptors
@@ -546,7 +560,65 @@ public class UserProcess {
 	 * int exec(char *file, int argc, char *argv[]);
 	 */
 	private int handleExec(int file, int argc, int argv) {
-		return -1;
+		// Get the name of the file to execute.
+		String fileName = readVirtualMemoryString(file, MAX_STRING_LENGTH);
+		// check if the file name is null, or invalid
+		if (fileName == null || fileName == "") {
+			return -1;
+		}
+		// check to see if the number of arguements is greater than 0
+		if (argc < 0) {
+			return -1;
+		}
+
+		// byteBuffer to house arguements
+		byte[] byteBuffer;
+
+		// make a new string array of arguements of size argc
+		String[] args = new String[argc];
+
+		// Extract argv pointers and read argument strings.
+		for (int index = 0; index < argc; index++) {
+			// allocate a byteBuffer if size containing one arguement
+			byteBuffer = new byte[BYTES_OF_INT];
+			// read argv pointer from user memory
+			bytesRead = readVirtualMemory(argv + (index * BYTES_OF_INT), byteBuffer);
+
+			// check if the bytes read is valid
+			if (bytesRead != BYTES_OF_INT) {
+				return -1;
+			}
+
+			int argAddr = Lib.bytesToInt(byteBuffer, 0);
+			args[index] = readVirtualMemory(argAddr, MAX_STRING_LENGTH);
+
+			// if the arguemnet was null, or invalid, return -1
+			if(args[index] == null || args[index] == ""){
+				return -1;
+			}
+		}
+		
+		// create a new child process 
+		UserProcess childProcess = newUserProcess();
+
+		// Load the executable and prepare it to run the specified arguments.
+		if(!childProcess.execute(fileName, args)){
+			recyclePID(childProcess.getCurrentID());
+			return -1;
+		}
+		// set the child process parent ID to the current 
+		// running process ID, synchronization supported
+		assignParentPIDLock.acquire();
+		childProcess.setParentID(this.getCurrentID());
+		assignParentPIDLock.release();
+
+		// add the child process to the parent's children hashmap
+		updateChildrenLock.acquire();
+		this.currentProcessChildren.put(childProcess.currentPID, childProcess);
+		updateChildrenLock.release();
+
+		// return the child's process ID
+		return childProcess.getCurrentID();
 	}
 
 	/**
@@ -983,13 +1055,18 @@ public class UserProcess {
 			case syscallHalt:
 				// is void
 				return handleHalt();
+			// exit system call to implement
 			case syscallExit:
 				// a0 represents the integer status
 				return handleExit(a0);
+			// exec system call to implement
 			case syscallExec:
-				return -1;
+				// a0 is the name, a1 and a2 are argc and argv respectively
+				return handleExec(a0, a1, a2);
+			// join system call to implement	
 			case syscallJoin:
-				return -1;
+				// a0 is PID and a1 is th status
+				return handleJoin(a0, a1);
 			// create system call to implement
 			case syscallCreate:
 				// a0 is the name of the file you wish to create
@@ -1071,6 +1148,8 @@ public class UserProcess {
 	// make a private final variable contain the max string length for a buffer
 	private static final int MAX_STRING_LENGTH = 256;
 
+	private static final int BYTES_OF_INT = 4;
+
 	// list of available file descriptors
 	private OpenFile[] fileDescriptors;
 
@@ -1081,4 +1160,85 @@ public class UserProcess {
 	private static final int pageSize = Processor.pageSize;
 
 	private static final char dbgProcess = 'a';
+
+	// process information
+	private boolean isRootProcess;
+	private static boolean rootProcessCreated = false; 
+
+	// PID INFORMATION
+	// personal process ID
+	private int currentPID;
+	// parent process ID
+	private int parentPID;
+	// static accessible and editable next process ID
+	private static int nextPID = 0;
+	// children map stores the child processes of this process, keyed by their pids.
+	private Map<Integer, UserProcess> currentProcessChildren = new HashMap<Integer, UserProcess>();
+	// data structure to hold recycling of PIDS
+	private static LinkedList<Integer> recycledPIDS = new LinkedList<Integer>();
+
+	// Synchronization Support
+	private static Lock updateChildrenLock = new Lock();
+	private static Lock assignCurrentPIDLock = new Lock();
+	private static Lock assignParentPIDLock = new Lock();
+
+	/**
+	 * this method gets the next available PID
+	 * It first checks to see if any recycled PIDS are available, 
+	 * else it simply assigns the next available PID if no recycled 
+	 * PIDS exist
+	 * 
+	 * @return the next available PID 
+	 */
+	public static int getNextAvailablePID() {
+		// check if there are recycled PIDS. If none,
+		// simply return the next PID
+		if(recycledPIDS.isEmpty()){
+			return (nextPID++);
+		} else {
+			// remove the first avalable and recycled PID
+			return recycledPIDS.removeFirst();
+		}
+	}
+
+	/**
+	 * This method recycles PIDS for reuse by the OS when making new processes
+	 */
+	public static void recyclePID(int pid){
+		// add the PID to the pool of recycled PIDs
+		recycledPIDS.add(pid);
+	}
+
+	/**
+	 * setter method for current process parent ID
+	 */
+	public void setParentID(int pid){
+		this.parentPID = pid;
+	}
+
+	/**
+	 * getter method for current process parent ID
+	 * 
+	 * @return current parent PID
+	 */
+	public int getParentID(){
+		return this.parentPID;
+	}
+
+	/**
+	 * setter method for current process ID
+	 */
+	public void setCurrentID(int pid){
+		this.currentPID = pid;
+	}
+
+	/**
+	 * getter method for current process ID
+	 * 
+	 * @return current PID
+	 */
+	public int getCurrentID(){
+		return this.currentPID;
+	}
+
 }
