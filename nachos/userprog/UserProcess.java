@@ -563,7 +563,7 @@ public class UserProcess {
 		// Get the name of the file to execute.
 		String fileName = readVirtualMemoryString(file, MAX_STRING_LENGTH);
 		// check if the file name is null, or invalid
-		if (fileName == null || fileName == "") {
+		if (fileName == null || fileName.equals("")) {
 			return -1;
 		}
 		// check to see if the number of arguements is greater than 0
@@ -593,7 +593,7 @@ public class UserProcess {
 			args[index] = readVirtualMemory(argAddr, MAX_STRING_LENGTH);
 
 			// if the arguemnet was null, or invalid, return -1
-			if(args[index] == null || args[index] == ""){
+			if(args[index] == null || args[index].equals("")){
 				return -1;
 			}
 		}
@@ -662,7 +662,7 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if (fileName == null || fileName == "") {
+		if (fileName == null || fileName.equals("")) {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
@@ -698,7 +698,7 @@ public class UserProcess {
 		// Attempt to open the named disk file
 		String fileName = readVirtualMemoryString(name, MAX_STRING_LENGTH);
 		// check if the file name is null, which indicates virtual memory is empty
-		if (fileName == null || fileName == "") {
+		if (fileName == null || fileName.equals("")) {
 			return -1;
 		}
 		// return a file descriptor that can be used to access the file
