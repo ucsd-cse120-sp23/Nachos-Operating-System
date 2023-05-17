@@ -577,8 +577,7 @@ public class UserProcess {
 		if(this.getParentID() != -1) {
 			
 		}
-
-
+		// Any children of the process no longer have a parent process.
 		// set all children's parentPID to -1
 		for (Iterator<Integer> keys = currentProcessChildren.keySet().iterator(); keys.hasNext();) {
 			// get the current key, a PID
