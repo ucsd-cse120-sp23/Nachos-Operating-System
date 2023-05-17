@@ -45,6 +45,11 @@ public class UserProcess {
 		}
 		updateCurrentPIDLock.release(); // release the lock after assigning PID
 
+		// put all processes into a hashmap
+		updateCurrentProcessesLock.acquire();
+		currentProcesses.put(getCurrentID(), this);
+		updateCurrentProcessesLock.release();
+
 		// mutual exclusion for updating the total num of processes
 		updateNumProcessesLock.acquire();
 		// increment the total number of current processes
@@ -574,8 +579,18 @@ public class UserProcess {
 		 
 		// if it has a parent process -> save child's exit status in parent
 		// Wake up parent if parent is sleeping
-		if(this.getParentID() != -1) {
-			
+		if (this.getParentID() != -1) {
+			// attempt to acces the parent USER PROCESS
+			UserProcess parentProcess = null;
+			updateCurrentProcessesLock.acquire();
+			UserProcess parentProcess = currentProcesses.get(this.getParentID());
+			updateCurrentProcessesLock.release();
+			// 
+			if (parentProcess != null) {
+				updateChildrenExitStatusesLock.acquire();
+				parentProcess.currentChildrenExitStatuses.put(this.getCurrentID(), status);
+				updateChildrenExitStatusesLock.release();
+			}
 		}
 		// Any children of the process no longer have a parent process.
 		// set all children's parentPID to -1
@@ -591,9 +606,14 @@ public class UserProcess {
 		KThread.finish();
 		
 		// if this is last running running process then terminate kernel
-		if(totalNumberOfCurrentProcesses == 1){
+		if (totalNumberOfCurrentProcesses == 1) {
 			Kernel.kernel.terminate();
 		}
+
+		// remove the process from our process hashmap
+		updateCurrentProcessesLock.acquire();
+		currentProcesses.remove(childProcess.getCurrentID());
+		updateCurrentProcessesLock.release();
 
 		// decrement the total number of current processes
 		updateNumProcessesLock.acquire();
@@ -677,7 +697,13 @@ public class UserProcess {
 		UserProcess childProcess = newUserProcess();
 
 		// Try to load the executable and prepare it to run with the given arguments
-		if(!childProcess.execute(fileName, args)){
+		if (!childProcess.execute(fileName, args)) {
+			
+			// remove the process from our process hashmap
+			updateCurrentProcessesLock.acquire();
+			currentProcesses.remove(childProcess.getCurrentID());
+			updateCurrentProcessesLock.release();
+
 			/** 
 			 * If the loading fails, recycle the process ID,
 			 * decrement the total number of current processes
@@ -1291,12 +1317,18 @@ public class UserProcess {
 	private HashMap<Integer, UserProcess> currentProcessChildren = new HashMap<Integer, UserProcess>();
 	// data structure to hold recycling of PIDS
 	private static LinkedList<Integer> recycledPIDS = new LinkedList<Integer>();
+	// data structure to hold children exit statuses
+	private HashMap<Integer, Interger> currentChildrenExitStatuses = new HashMap<Integer, Integer>();
+	// datat structure that holds every process
+	private static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
 
 	// Synchronization Support
 	private static Lock updateChildrenLock = new Lock();
 	private static Lock updateCurrentPIDLock = new Lock();
 	private static Lock updateParentIDLock = new Lock();
     private static Lock updateNumProcessesLock = new Lock();
+	private static Lock updateChildrenExitStatusesLock = new Lock();
+	private static Lock updateCurrentProcessesLock = new Lock();
 	/**
 	 * this method gets the next available PID
 	 * It first checks to see if any recycled PIDS are available, 
