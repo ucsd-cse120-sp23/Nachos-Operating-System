@@ -516,13 +516,19 @@ public class UserProcess {
 	 * immediately.
 	 */
 	private int handleHalt() {
-		//check to see if the root process is calling halt 
-		// if so then allow to halt,
-		// wise return and error 
+		// check to see if the root process is calling halt 
 		if(!this.isRootProcess){
+			/**
+			 * If another process attempts to invoke halt, 
+			 * the system should not halt and the handler should 
+			 * return immediately with -1 to indicate an error.
+			 */
 			return -1;
 		} else {
+			// HALT can only be invoked by the "root" process 
+			// — that is, the initial process in the system
 			Machine.halt();
+			// if this is reached, then the machine did not halt
 			Lib.assertNotReached("Machine.halt() did not halt machine!");
 			return 0;
 		}
@@ -549,8 +555,16 @@ public class UserProcess {
 
 		// close all file descriptors belonging to the current process
 		for (int i = 0; i < this.fileDescriptors.length; i++){
-			fileDescriptors[i].close();
-			fileDescriptors[i] = null;
+			// if the current file descriptor has data that is null, continue with the loop
+			if(fileDescriptors[i] == null){
+				continue;
+				// else the current file descriptor holds a valid file
+			} else {
+				// close the file
+				fileDescriptors[i].close();
+				// set the current file object to null
+				fileDescriptors[i] = null;
+			}
 		}
 		// release all memory calling unloadSection
 		unloadSections();
@@ -734,9 +748,8 @@ public class UserProcess {
 		this.currentProcessChildren.remove(processID);
 		updateChildrenLock.release();
 
-		// otherwise child process still running 
-
-		// childProcess.thread.join();  
+		// If the child process is still running, join with it
+		childProcess.thread.join();  
 
 	
 		// after child has called exit(), determine the child's exit status
