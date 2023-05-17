@@ -295,6 +295,8 @@ public class KThread {
 	 * is not guaranteed to return. This thread must not be the current thread.
 	 */
 	public void join() {
+		Lib.debug(dbgThread, "Joining to thread: " + toString());
+		Lib.assertTrue(this != currentThread);
 		// a thread cannot call join() on itself
 		if (currentThread.compareTo(this) == 0) {
 			System.out.println("cannot join self");
@@ -331,9 +333,6 @@ public class KThread {
 			// reenable interrupts
 			Machine.interrupt().enable();
 		}
-		Lib.debug(dbgThread, "Joining to thread: " + toString());
-
-		Lib.assertTrue(this != currentThread);
 	}
 
 	/**

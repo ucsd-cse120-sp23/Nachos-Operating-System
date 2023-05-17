@@ -5,6 +5,12 @@ import nachos.threads.*;
 import nachos.userprog.*;
 import nachos.vm.*;
 
+import java.util.*;
+import java.util.ArrayDeque;
+import java.util.HashMap;
+import java.util.Map.Entry;
+import java.lang.String;
+
 import java.io.EOFException;
 import java.util.LinkedList;
 
@@ -26,17 +32,24 @@ public class UserProcess {
 	 */
 	public UserProcess() {
 		// assign PID, synchronization supported
-		assignCurrentPIDLock.acquire(); // // acquire the lock before assigning PID
+		updateCurrentPIDLock.acquire(); // // acquire the lock before assigning PID
 		setCurrentID(getNextAvailablePID()); // assign a PID to the current process
 		// check against the first root process for exit
 		// only two cases, a process is the root, or it is not
 		if(!rootProcessCreated){
 			isRootProcess = true;
 			rootProcessCreated = true;
+			setParentID(-1);
 		} else {
 			isRootProcess = false;
 		}
-		assignCurrentPIDLock.release(); // release the lock after assigning PID
+		updateCurrentPIDLock.release(); // release the lock after assigning PID
+
+		// mutual exclusion for updating the total num of processes
+		updateNumProcessesLock.acquire();
+		// increment the total number of current processes
+		totalNumberOfCurrentProcesses++;
+		updateNumProcessesLock.release();
 
 		// creates a new ArrayList of file descriptors that are all comprised of null
 		// file descriptors
@@ -404,7 +417,6 @@ public class UserProcess {
 		TranslationEntry pageTableEntry;
 		// physical page number reference
 		int physPageNum;
-		int pagesPSection = 0;
 		int vpn = 0;
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
@@ -434,7 +446,6 @@ public class UserProcess {
 				// insert the entry into the page table
 				pageTable[vpn] = pageTableEntry;
 				// load page into physical memory
-				pagesPSection++;
 				section.loadPage(i, physPageNum);
 			}
 		}
@@ -505,11 +516,16 @@ public class UserProcess {
 	 * immediately.
 	 */
 	private int handleHalt() {
-
-		Machine.halt();
-
-		Lib.assertNotReached("Machine.halt() did not halt machine!");
-		return 0;
+		//check to see if the root process is calling halt 
+		// if so then allow to halt,
+		// wise return and error 
+		if(!this.isRootProcess){
+			return -1;
+		} else {
+			Machine.halt();
+			Lib.assertNotReached("Machine.halt() did not halt machine!");
+			return 0;
+		}
 	}
 
 	/**
@@ -529,10 +545,47 @@ public class UserProcess {
 		Machine.autoGrader().finishingCurrentProcess(status);
 		// ...and leave it as the top of handleExit so that we
 		// can grade your implementation.
-
 		Lib.debug(dbgProcess, "UserProcess.handleExit (" + status + ")");
-		// for now, unconditionally terminate with just one process
-		Kernel.kernel.terminate();
+
+		// close all file descriptors belonging to the current process
+		for (int i = 0; i < this.fileDescriptors.length; i++){
+			fileDescriptors[i].close();
+			fileDescriptors[i] = null;
+		}
+		// release all memory calling unloadSection
+		unloadSections();
+
+		// close sections by calling
+		coff.close();
+		 
+		// if it has a parent process -> save child's exit status in parent
+		// Wake up parent if parent is sleeping
+		if(this.getParentID() != -1) {
+			
+		}
+
+
+		// set all children's parentPID to -1
+		for (Iterator<Integer> keys = currentProcessChildren.keySet().iterator(); keys.hasNext();) {
+			// get the current key, a PID
+			Integer key = keys.next();
+			// get the current value, a UserProcess
+			UserProcess childProcess = currentProcessChildren.get(key);
+			childProcess.setParentID(-1);
+		}
+
+		// close Kthread by calling Kthread.finish()
+		KThread.finish();
+		
+		// if this is last running running process then terminate kernel
+		if(totalNumberOfCurrentProcesses == 1){
+			Kernel.kernel.terminate();
+		}
+
+		// decrement the total number of current processes
+		updateNumProcessesLock.acquire();
+		totalNumberOfCurrentProcesses--;
+		updateNumProcessesLock.release();
 
 		return 0;
 	}
@@ -558,7 +611,7 @@ public class UserProcess {
 	 * join(). On error, returns -1.
 	 * 
 	 * int exec(char *file, int argc, char *argv[]);
-	 */
+	 */	
 	private int handleExec(int file, int argc, int argv) {
 		// Get the name of the file to execute.
 		String fileName = readVirtualMemoryString(file, MAX_STRING_LENGTH);
@@ -566,33 +619,42 @@ public class UserProcess {
 		if (fileName == null || fileName.equals("")) {
 			return -1;
 		}
-		// check to see if the number of arguements is greater than 0
+		// check to see if the number of arguements is non-negative
 		if (argc < 0) {
 			return -1;
 		}
 
-		// byteBuffer to house arguements
+		// check if the file is an appropriate object file (.coff) file,
+		// string must include the ".coff" extension.
+		if(!fileName.endsWith(".coff")){
+			return -1;
+		}
+
+		// Declare a byte buffer to read argument addresses
 		byte[] byteBuffer;
 
-		// make a new string array of arguements of size argc
+		// Create an array to store the argument strings of size argc
 		String[] args = new String[argc];
 
-		// Extract argv pointers and read argument strings.
+		// Loop through each argument
 		for (int index = 0; index < argc; index++) {
-			// allocate a byteBuffer if size containing one arguement
+			// Initialize the byte buffer to store one argument address
 			byteBuffer = new byte[BYTES_OF_INT];
-			// read argv pointer from user memory
-			bytesRead = readVirtualMemory(argv + (index * BYTES_OF_INT), byteBuffer);
+			// Read the argument address from the virtual memory
+			int bytesRead = readVirtualMemory(argv + (index * BYTES_OF_INT), byteBuffer);
 
-			// check if the bytes read is valid
+			// Ensure the correct number of bytes were read
 			if (bytesRead != BYTES_OF_INT) {
 				return -1;
 			}
 
+			// Convert the byte buffer into an integer to get the argument address
 			int argAddr = Lib.bytesToInt(byteBuffer, 0);
-			args[index] = readVirtualMemory(argAddr, MAX_STRING_LENGTH);
 
-			// if the arguemnet was null, or invalid, return -1
+			// Read the argument string from the virtual memory
+			args[index] = readVirtualMemoryString(argAddr, MAX_STRING_LENGTH);
+
+			// Check if the argument is null or an empty string
 			if(args[index] == null || args[index].equals("")){
 				return -1;
 			}
@@ -601,18 +663,32 @@ public class UserProcess {
 		// create a new child process 
 		UserProcess childProcess = newUserProcess();
 
-		// Load the executable and prepare it to run the specified arguments.
+		// Try to load the executable and prepare it to run with the given arguments
 		if(!childProcess.execute(fileName, args)){
+			/** 
+			 * If the loading fails, recycle the process ID,
+			 * decrement the total number of current processes
+			 * and return -1
+			 */
+			updateCurrentPIDLock.acquire();
 			recyclePID(childProcess.getCurrentID());
+			updateCurrentPIDLock.release();
+
+			// decrement the total number of current processes 
+			updateNumProcessesLock.acquire();
+			totalNumberOfCurrentProcesses--;
+			updateNumProcessesLock.release();
+
+			// return -1 for error
 			return -1;
 		}
-		// set the child process parent ID to the current 
-		// running process ID, synchronization supported
-		assignParentPIDLock.acquire();
-		childProcess.setParentID(this.getCurrentID());
-		assignParentPIDLock.release();
 
-		// add the child process to the parent's children hashmap
+		// Set the child process's parent ID to the current process ID
+		updateParentIDLock.acquire();
+		childProcess.setParentID(this.getCurrentID());
+		updateParentIDLock.release();
+
+		// Add the child process to the parent's children hashmap
 		updateChildrenLock.acquire();
 		this.currentProcessChildren.put(childProcess.currentPID, childProcess);
 		updateChildrenLock.release();
@@ -642,7 +718,31 @@ public class UserProcess {
 	 * 
 	 */
 	private int handleJoin(int processID, int status) {
-		return -1;
+		// If processID is invalid or if processID does not refer 
+		// to a child process of the current process, return -1.
+		if( (processID < 0) || !this.currentProcessChildren.containsKey(processID)){
+			return -1;
+		}
+		
+		// if child has already exited, return immediately (return value still affected by childn's exit status?)
+
+		// Extract the child process from the current process's children map
+		UserProcess childProcess = this.currentProcessChildren.get(processID);
+
+		// remove the child from the current process's children map
+		updateChildrenLock.acquire();
+		this.currentProcessChildren.remove(processID);
+		updateChildrenLock.release();
+
+		// otherwise child process still running 
+
+		// childProcess.thread.join();  
+
+	
+		// after child has called exit(), determine the child's exit status
+		
+		// return 0 or 1 depending on the child's exit status
+		return 0;
 	}
 
 	/**
@@ -1160,6 +1260,9 @@ public class UserProcess {
 	private static final int pageSize = Processor.pageSize;
 
 	private static final char dbgProcess = 'a';
+	
+	// keep track of the number of total processes in the system
+	private static int totalNumberOfCurrentProcesses = 0;
 
 	// process information
 	private boolean isRootProcess;
@@ -1173,15 +1276,15 @@ public class UserProcess {
 	// static accessible and editable next process ID
 	private static int nextPID = 0;
 	// children map stores the child processes of this process, keyed by their pids.
-	private Map<Integer, UserProcess> currentProcessChildren = new HashMap<Integer, UserProcess>();
+	private HashMap<Integer, UserProcess> currentProcessChildren = new HashMap<Integer, UserProcess>();
 	// data structure to hold recycling of PIDS
 	private static LinkedList<Integer> recycledPIDS = new LinkedList<Integer>();
 
 	// Synchronization Support
 	private static Lock updateChildrenLock = new Lock();
-	private static Lock assignCurrentPIDLock = new Lock();
-	private static Lock assignParentPIDLock = new Lock();
-
+	private static Lock updateCurrentPIDLock = new Lock();
+	private static Lock updateParentIDLock = new Lock();
+    private static Lock updateNumProcessesLock = new Lock();
 	/**
 	 * this method gets the next available PID
 	 * It first checks to see if any recycled PIDS are available, 
