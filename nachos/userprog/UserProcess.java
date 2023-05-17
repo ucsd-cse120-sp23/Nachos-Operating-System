@@ -45,7 +45,7 @@ public class UserProcess {
 		}
 		updateCurrentPIDLock.release(); // release the lock after assigning PID
 
-		// put all processes into a hashmap
+		// put process in hashmap
 		updateCurrentProcessesLock.acquire();
 		currentProcesses.put(getCurrentID(), this);
 		updateCurrentProcessesLock.release();
@@ -53,7 +53,7 @@ public class UserProcess {
 		// mutual exclusion for updating the total num of processes
 		updateNumProcessesLock.acquire();
 		// increment the total number of current processes
-		totalNumberOfCurrentProcesses++;
+		totalProcesses++;
 		updateNumProcessesLock.release();
 
 		// creates a new ArrayList of file descriptors that are all comprised of null
@@ -531,7 +531,7 @@ public class UserProcess {
 			return -1;
 		} else {
 			// HALT can only be invoked by the "root" process 
-			// — that is, the initial process in the system
+			// - that is, the initial process in the system
 			Machine.halt();
 			// if this is reached, then the machine did not halt
 			Lib.assertNotReached("Machine.halt() did not halt machine!");
@@ -580,15 +580,13 @@ public class UserProcess {
 		// if it has a parent process -> save child's exit status in parent
 		// Wake up parent if parent is sleeping
 		if (this.getParentID() != -1) {
-			// attempt to acces the parent USER PROCESS
-			UserProcess parentProcess = null;
 			updateCurrentProcessesLock.acquire();
-			UserProcess parentProcess = currentProcesses.get(this.getParentID());
+			UserProcess	parentProcess = currentProcesses.get(this.getParentID());
 			updateCurrentProcessesLock.release();
 			// 
 			if (parentProcess != null) {
 				updateChildrenExitStatusesLock.acquire();
-				parentProcess.currentChildrenExitStatuses.put(this.getCurrentID(), status);
+				parentProcess.childrenExitStatuses.put(this.getCurrentID(), status);
 				updateChildrenExitStatusesLock.release();
 			}
 		}
@@ -602,22 +600,26 @@ public class UserProcess {
 			childProcess.setParentID(-1);
 		}
 
+		// if this is last running running process then terminate kernel
+		System.out.println("total processes" + totalProcesses);
+
 		// close Kthread by calling Kthread.finish()
 		KThread.finish();
 		
 		// if this is last running running process then terminate kernel
-		if (totalNumberOfCurrentProcesses == 1) {
+		System.out.println("total processes" + totalProcesses);
+		if (totalProcesses == 1) {
 			Kernel.kernel.terminate();
 		}
 
-		// remove the process from our process hashmap
+		// remove exiting process from our process hashmap
 		updateCurrentProcessesLock.acquire();
-		currentProcesses.remove(childProcess.getCurrentID());
+		currentProcesses.remove(this.getCurrentID());
 		updateCurrentProcessesLock.release();
 
 		// decrement the total number of current processes
 		updateNumProcessesLock.acquire();
-		totalNumberOfCurrentProcesses--;
+		totalProcesses--;
 		updateNumProcessesLock.release();
 
 		return 0;
@@ -715,7 +717,7 @@ public class UserProcess {
 
 			// decrement the total number of current processes 
 			updateNumProcessesLock.acquire();
-			totalNumberOfCurrentProcesses--;
+			totalProcesses--;
 			updateNumProcessesLock.release();
 
 			// return -1 for error
@@ -1300,7 +1302,7 @@ public class UserProcess {
 	private static final char dbgProcess = 'a';
 	
 	// keep track of the number of total processes in the system
-	private static int totalNumberOfCurrentProcesses = 0;
+	private static int totalProcesses = 0;
 
 	// process information
 	private boolean isRootProcess;
@@ -1318,9 +1320,12 @@ public class UserProcess {
 	// data structure to hold recycling of PIDS
 	private static LinkedList<Integer> recycledPIDS = new LinkedList<Integer>();
 	// data structure to hold children exit statuses
-	private HashMap<Integer, Interger> currentChildrenExitStatuses = new HashMap<Integer, Integer>();
+	private HashMap<Integer, Integer> childrenExitStatuses = new HashMap<Integer, Integer>();
 	// datat structure that holds every process
 	private static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
+	// condition variable for waking parents
+	private Condition waitforChild = new Condition(conditionLock);
+
 
 	// Synchronization Support
 	private static Lock updateChildrenLock = new Lock();
@@ -1329,6 +1334,7 @@ public class UserProcess {
     private static Lock updateNumProcessesLock = new Lock();
 	private static Lock updateChildrenExitStatusesLock = new Lock();
 	private static Lock updateCurrentProcessesLock = new Lock();
+	private static Lock conditionLock = new Lock();
 	/**
 	 * this method gets the next available PID
 	 * It first checks to see if any recycled PIDS are available, 
