@@ -1,4 +1,4 @@
-# Project 1 README 
+# Project 2 README 
 ### Group members: 
 * Alexander G. Arias - A16525320
 * Alan Vu - A16677269
@@ -10,4 +10,4 @@ We, as a group wrote a great majority of the methods, with minor changes made by
 Every group member contributed, for the most part, equally and fairly.<br> 
 
 ### Testing:<br>
-The way we test our implementations was using all of the sample tests that were provided by the project page, and writing addditional testing methods that would test different situations for the functions. From there we would observe the output of the test we wrote and determine from the specification if it behaved as expected. We believe that our code works for the most part.
+The way we test our implementations was using all of the sample tests that were provided by the project page, and writing addditional testing files that would test different situations for the functions. From there we would observe the output of the test we wrote and determine from the specification if it behaved as expected. We believe that our code works for the most part.
