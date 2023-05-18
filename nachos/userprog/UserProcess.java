@@ -32,7 +32,7 @@ public class UserProcess {
 	 */
 	public UserProcess() {
 		// assign PID, synchronization supported
-		updateCurrentPIDLock.acquire(); // // acquire the lock before assigning PID
+		updatePIDLock.acquire(); // // acquire the lock before assigning PID
 		setCurrentID(getNextAvailablePID()); // assign a PID to the current process
 		// check against the first root process for exit
 		// only two cases, a process is the root, or it is not
@@ -43,18 +43,14 @@ public class UserProcess {
 		} else {
 			isRootProcess = false;
 		}
-		updateCurrentPIDLock.release(); // release the lock after assigning PID
+		updatePIDLock.release(); // release the lock after assigning PID
 
+		updateProcessLock.acquire();
 		// put process in hashmap
-		updateCurrentProcessesLock.acquire();
 		currentProcesses.put(getCurrentID(), this);
-		updateCurrentProcessesLock.release();
-
-		// mutual exclusion for updating the total num of processes
-		updateNumProcessesLock.acquire();
 		// increment the total number of current processes
 		totalProcesses++;
-		updateNumProcessesLock.release();
+		updateProcessLock.release();
 
 		// creates a new ArrayList of file descriptors that are all comprised of null
 		// file descriptors
@@ -578,18 +574,14 @@ public class UserProcess {
 		coff.close();
 		 
 		// if it has a parent process -> save child's exit status in parent
-		// Wake up parent if parent is sleeping
 		if (this.getParentID() != -1) {
-			updateCurrentProcessesLock.acquire();
 			UserProcess	parentProcess = currentProcesses.get(this.getParentID());
-			updateCurrentProcessesLock.release();
-			// 
+			// check if accessing the childs parent process was successful
 			if (parentProcess != null) {
-				updateChildrenExitStatusesLock.acquire();
 				parentProcess.childrenExitStatuses.put(this.getCurrentID(), status);
-				updateChildrenExitStatusesLock.release();
 			}
 		}
+		
 		// Any children of the process no longer have a parent process.
 		// set all children's parentPID to -1
 		for (Iterator<Integer> keys = currentProcessChildren.keySet().iterator(); keys.hasNext();) {
@@ -601,27 +593,27 @@ public class UserProcess {
 		}
 
 		// if this is last running running process then terminate kernel
-		System.out.println("total processes" + totalProcesses);
-
-		// close Kthread by calling Kthread.finish()
-		KThread.finish();
-		
-		// if this is last running running process then terminate kernel
-		System.out.println("total processes" + totalProcesses);
+		System.out.println("In handleExit, totalProcesses = " + totalProcesses);
 		if (totalProcesses == 1) {
 			Kernel.kernel.terminate();
 		}
 
+		
+		updateProcessLock.acquire();
 		// remove exiting process from our process hashmap
-		updateCurrentProcessesLock.acquire();
 		currentProcesses.remove(this.getCurrentID());
-		updateCurrentProcessesLock.release();
-
 		// decrement the total number of current processes
-		updateNumProcessesLock.acquire();
 		totalProcesses--;
-		updateNumProcessesLock.release();
+		updateProcessLock.release();
 
+		updatePIDLock.acquire();
+		// recycle the pid of the current process that called exit
+		recycledPIDS.add(this.getCurrentID());
+		updatePIDLock.release();
+
+		// close Kthread by calling Kthread
+		// wakes up the parent process if one exists
+		KThread.finish();
 		return 0;
 	}
 
@@ -701,38 +693,31 @@ public class UserProcess {
 		// Try to load the executable and prepare it to run with the given arguments
 		if (!childProcess.execute(fileName, args)) {
 			
+			updateProcessLock.acquire();
 			// remove the process from our process hashmap
-			updateCurrentProcessesLock.acquire();
 			currentProcesses.remove(childProcess.getCurrentID());
-			updateCurrentProcessesLock.release();
+			// decrement the total number of current processes 
+			totalProcesses--;
+			updateProcessLock.release();
 
 			/** 
 			 * If the loading fails, recycle the process ID,
 			 * decrement the total number of current processes
 			 * and return -1
 			 */
-			updateCurrentPIDLock.acquire();
+			updatePIDLock.acquire();
 			recyclePID(childProcess.getCurrentID());
-			updateCurrentPIDLock.release();
-
-			// decrement the total number of current processes 
-			updateNumProcessesLock.acquire();
-			totalProcesses--;
-			updateNumProcessesLock.release();
+			updatePIDLock.release();
 
 			// return -1 for error
 			return -1;
 		}
 
 		// Set the child process's parent ID to the current process ID
-		updateParentIDLock.acquire();
 		childProcess.setParentID(this.getCurrentID());
-		updateParentIDLock.release();
 
 		// Add the child process to the parent's children hashmap
-		updateChildrenLock.acquire();
 		this.currentProcessChildren.put(childProcess.currentPID, childProcess);
-		updateChildrenLock.release();
 
 		// return the child's process ID
 		return childProcess.getCurrentID();
@@ -764,25 +749,60 @@ public class UserProcess {
 		if( (processID < 0) || !this.currentProcessChildren.containsKey(processID)){
 			return -1;
 		}
-		
-		// if child has already exited, return immediately (return value still affected by childn's exit status?)
 
+		// write the child's status to the specified virtual address,
+		// if the parent contains the childs exit status before join was called
+		if(this.childrenExitStatuses.containsKey(processID)) {
+			UserProcess childProcess = this.currentProcessChildren.get(processID);
+			byte[] statusByteBuffer = Lib.bytesFromInt(this.childrenExitStatuses.get(processID));
+			int bytesWritten = writeVirtualMemory(status, statusByteBuffer);
+
+			// if the total bytes written was not the total number of bytes in an int,
+			// return 0 (child exited as a result of an unhandled exception)
+			if (bytesWritten != BYTES_OF_INT) {
+				return 0;
+			}
+			/**
+			 * If the child exited normally, returns 1. If 
+			 * the child exited as a result of an unhandled exception, 
+			 * returns 0.
+			 */
+			if (childProcess.getProcessExitedNormally()){
+				return 1;
+			} else {
+				return 0;
+			}
+		}
+		
 		// Extract the child process from the current process's children map
 		UserProcess childProcess = this.currentProcessChildren.get(processID);
 
 		// remove the child from the current process's children map
-		updateChildrenLock.acquire();
 		this.currentProcessChildren.remove(processID);
-		updateChildrenLock.release();
+		
 
 		// If the child process is still running, join with it
-		childProcess.thread.join();  
-
-	
-		// after child has called exit(), determine the child's exit status
+		childProcess.thread.join();
 		
-		// return 0 or 1 depending on the child's exit status
-		return 0;
+		// after child has called exit(), determine the child's exit status
+		byte[] statusByteBuffer = Lib.bytesFromInt(this.childrenExitStatuses.get(processID));
+		int bytesWritten = writeVirtualMemory(status, statusByteBuffer);
+
+		// if the total bytes written was not the total number of bytes in an int,
+		// return 0 (child exited as a result of an unhandled exception)
+		if (bytesWritten != BYTES_OF_INT) {
+			return 0;
+		}
+		/**
+		 * If the child exited normally, returns 1. If 
+		 * the child exited as a result of an unhandled exception, 
+		 * returns 0.
+		 */
+		if (childProcess.getProcessExitedNormally()){
+			return 1;
+		} else {
+			return 0;
+		}
 	}
 
 	/**
@@ -1264,6 +1284,9 @@ public class UserProcess {
 				Lib.debug(dbgProcess, "Unexpected exception: "
 						+ Processor.exceptionNames[cause]);
 				Lib.assertNotReached("Unexpected exception");
+				// call handleExit
+				this.exitedNormally = false;
+				handleExit(0);
 		}
 	}
 
@@ -1308,6 +1331,9 @@ public class UserProcess {
 	private boolean isRootProcess;
 	private static boolean rootProcessCreated = false; 
 
+	// indicates if the process exited due to an unhandled exception
+	private boolean exitedNormally = true;
+
 	// PID INFORMATION
 	// personal process ID
 	private int currentPID;
@@ -1319,22 +1345,18 @@ public class UserProcess {
 	private HashMap<Integer, UserProcess> currentProcessChildren = new HashMap<Integer, UserProcess>();
 	// data structure to hold recycling of PIDS
 	private static LinkedList<Integer> recycledPIDS = new LinkedList<Integer>();
-	// data structure to hold children exit statuses
+	// data structure to hold children exit statuses K = PID, V = exit status
 	private HashMap<Integer, Integer> childrenExitStatuses = new HashMap<Integer, Integer>();
-	// datat structure that holds every process
+	// data structure that holds every process
 	private static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
-	// condition variable for waking parents
-	private Condition waitforChild = new Condition(conditionLock);
-
+	
 
 	// Synchronization Support
-	private static Lock updateChildrenLock = new Lock();
-	private static Lock updateCurrentPIDLock = new Lock();
-	private static Lock updateParentIDLock = new Lock();
-    private static Lock updateNumProcessesLock = new Lock();
-	private static Lock updateChildrenExitStatusesLock = new Lock();
-	private static Lock updateCurrentProcessesLock = new Lock();
-	private static Lock conditionLock = new Lock();
+	private static Lock updatePIDLock = new Lock();
+	private static Condition cvPID = new Condition(updatePIDLock);
+	private static Lock updateProcessLock = new Lock();
+	private static Condition cvProcesses = new Condition(updateProcessLock);
+
 	/**
 	 * this method gets the next available PID
 	 * It first checks to see if any recycled PIDS are available, 
@@ -1392,6 +1414,13 @@ public class UserProcess {
 	 */
 	public int getCurrentID(){
 		return this.currentPID;
+	}
+	/**
+	 * getter method for current proccess exited normally
+	 * @return true or false, if it exited normally
+	 */
+	public boolean getProcessExitedNormally(){
+		return this.exitedNormally;
 	}
 
 }
