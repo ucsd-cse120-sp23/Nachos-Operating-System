@@ -36,7 +36,7 @@ public class UserProcess {
 		setCurrentID(getNextAvailablePID()); // assign a PID to the current process
 		// check against the first root process for exit
 		// only two cases, a process is the root, or it is not
-		if(!rootProcessCreated){
+		if (!rootProcessCreated) {
 			isRootProcess = true;
 			rootProcessCreated = true;
 			setParentID(-1);
@@ -517,16 +517,16 @@ public class UserProcess {
 	 * immediately.
 	 */
 	private int handleHalt() {
-		// check to see if the root process is calling halt 
-		if(!this.isRootProcess){
+		// check to see if the root process is calling halt
+		if (!this.isRootProcess) {
 			/**
-			 * If another process attempts to invoke halt, 
-			 * the system should not halt and the handler should 
+			 * If another process attempts to invoke halt,
+			 * the system should not halt and the handler should
 			 * return immediately with -1 to indicate an error.
 			 */
 			return -1;
 		} else {
-			// HALT can only be invoked by the "root" process 
+			// HALT can only be invoked by the "root" process
 			// - that is, the initial process in the system
 			Machine.halt();
 			// if this is reached, then the machine did not halt
@@ -555,9 +555,9 @@ public class UserProcess {
 		Lib.debug(dbgProcess, "UserProcess.handleExit (" + status + ")");
 
 		// close all file descriptors belonging to the current process
-		for (int i = 0; i < this.fileDescriptors.length; i++){
+		for (int i = 0; i < this.fileDescriptors.length; i++) {
 			// if the current file descriptor has data that is null, continue with the loop
-			if(fileDescriptors[i] == null){
+			if (fileDescriptors[i] == null) {
 				continue;
 				// else the current file descriptor holds a valid file
 			} else {
@@ -572,16 +572,16 @@ public class UserProcess {
 
 		// close sections by calling
 		coff.close();
-		 
+
 		// if it has a parent process -> save child's exit status in parent
 		if (this.getParentID() != -1) {
-			UserProcess	parentProcess = currentProcesses.get(this.getParentID());
+			UserProcess parentProcess = currentProcesses.get(this.getParentID());
 			// check if accessing the childs parent process was successful
 			if (parentProcess != null) {
 				parentProcess.childrenExitStatuses.put(this.getCurrentID(), status);
 			}
 		}
-		
+
 		// Any children of the process no longer have a parent process.
 		// set all children's parentPID to -1
 		for (Iterator<Integer> keys = currentProcessChildren.keySet().iterator(); keys.hasNext();) {
@@ -597,7 +597,6 @@ public class UserProcess {
 			Kernel.kernel.terminate();
 		}
 
-		
 		updateProcessLock.acquire();
 		// remove exiting process from our process hashmap
 		currentProcesses.remove(this.getCurrentID());
@@ -637,7 +636,7 @@ public class UserProcess {
 	 * join(). On error, returns -1.
 	 * 
 	 * int exec(char *file, int argc, char *argv[]);
-	 */	
+	 */
 	private int handleExec(int file, int argc, int argv) {
 		// Get the name of the file to execute.
 		String fileName = readVirtualMemoryString(file, MAX_STRING_LENGTH);
@@ -652,7 +651,7 @@ public class UserProcess {
 
 		// check if the file is an appropriate object file (.coff) file,
 		// string must include the ".coff" extension.
-		if(!fileName.endsWith(".coff")){
+		if (!fileName.endsWith(".coff")) {
 			return -1;
 		}
 
@@ -681,25 +680,25 @@ public class UserProcess {
 			args[index] = readVirtualMemoryString(argAddr, MAX_STRING_LENGTH);
 
 			// Check if the argument is null or an empty string
-			if(args[index] == null || args[index].equals("")){
+			if (args[index] == null || args[index].equals("")) {
 				return -1;
 			}
 		}
-		
-		// create a new child process 
+
+		// create a new child process
 		UserProcess childProcess = newUserProcess();
 
 		// Try to load the executable and prepare it to run with the given arguments
 		if (!childProcess.execute(fileName, args)) {
-			
+
 			updateProcessLock.acquire();
 			// remove the process from our process hashmap
 			currentProcesses.remove(childProcess.getCurrentID());
-			// decrement the total number of current processes 
+			// decrement the total number of current processes
 			totalProcesses--;
 			updateProcessLock.release();
 
-			/** 
+			/**
 			 * If the loading fails, recycle the process ID,
 			 * decrement the total number of current processes
 			 * and return -1
@@ -743,15 +742,15 @@ public class UserProcess {
 	 * 
 	 */
 	private int handleJoin(int processID, int status) {
-		// If processID is invalid or if processID does not refer 
+		// If processID is invalid or if processID does not refer
 		// to a child process of the current process, return -1.
-		if( (processID < 0) || !this.currentProcessChildren.containsKey(processID)){
+		if ((processID < 0) || !this.currentProcessChildren.containsKey(processID)) {
 			return -1;
 		}
 
 		// write the child's status to the specified virtual address,
 		// if the parent contains the childs exit status before join was called
-		if(this.childrenExitStatuses.containsKey(processID)) {
+		if (this.childrenExitStatuses.containsKey(processID)) {
 			UserProcess childProcess = this.currentProcessChildren.get(processID);
 			byte[] statusByteBuffer = Lib.bytesFromInt(this.childrenExitStatuses.get(processID));
 			int bytesWritten = writeVirtualMemory(status, statusByteBuffer);
@@ -762,27 +761,26 @@ public class UserProcess {
 				return 0;
 			}
 			/**
-			 * If the child exited normally, returns 1. If 
-			 * the child exited as a result of an unhandled exception, 
+			 * If the child exited normally, returns 1. If
+			 * the child exited as a result of an unhandled exception,
 			 * returns 0.
 			 */
-			if (childProcess.getProcessExitedNormally()){
+			if (childProcess.getProcessExitedNormally()) {
 				return 1;
 			} else {
 				return 0;
 			}
 		}
-		
+
 		// Extract the child process from the current process's children map
 		UserProcess childProcess = this.currentProcessChildren.get(processID);
 
 		// remove the child from the current process's children map
 		this.currentProcessChildren.remove(processID);
-		
 
 		// If the child process is still running, join with it
 		childProcess.thread.join();
-		
+
 		// after child has called exit(), determine the child's exit status
 		byte[] statusByteBuffer = Lib.bytesFromInt(this.childrenExitStatuses.get(processID));
 		int bytesWritten = writeVirtualMemory(status, statusByteBuffer);
@@ -793,11 +791,11 @@ public class UserProcess {
 			return 0;
 		}
 		/**
-		 * If the child exited normally, returns 1. If 
-		 * the child exited as a result of an unhandled exception, 
+		 * If the child exited normally, returns 1. If
+		 * the child exited as a result of an unhandled exception,
 		 * returns 0.
 		 */
-		if (childProcess.getProcessExitedNormally()){
+		if (childProcess.getProcessExitedNormally()) {
 			return 1;
 		} else {
 			return 0;
@@ -920,14 +918,13 @@ public class UserProcess {
 		if (buffer < 0 || buffer > numPages * pageSize) {
 			return -1;
 		}
-
 		// Check if the buffer address and size exceed the address space
 		if (buffer + count > numPages * pageSize) {
 			return -1;
 		}
 
 		// bytes buffer
-		byte[] byteBuffer = new byte[pageSize];
+		byte[] byteBuffer;
 		// virtual address of buffer
 		int vaBuffer = buffer;
 		// total bytes to read and write to virtual memory
@@ -940,19 +937,20 @@ public class UserProcess {
 
 		// while there are still bytes left to read from count
 		while (bytesLeft > 0) {
-
 			// determine to read the minimum between pageSize and bytesLeft
 			int bufferSize = Math.min(pageSize, bytesLeft);
 
+			// byte buffer of size buffersize
+			byteBuffer = new byte[bufferSize];
+
 			// return the number of bytes read
 			int bytesRead = fileToRead.read(byteBuffer, 0, bufferSize);
-
 			// check if read is valid
 			if (bytesRead == -1) {
-				return -1;	
-			} 
+				return -1;
+			}
 			// check for valid vaBuffer
-			if (vaBuffer < 0 || vaBuffer >= numPages * pageSize) {
+			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
 				return -1;
 			}
 			// write to virtual memory
@@ -1014,7 +1012,7 @@ public class UserProcess {
 			return -1;
 		}
 		// checking for invalid buffer address
-		if (buffer < 0 || buffer >= numPages * pageSize) {
+		if (buffer < 0 || buffer > numPages * pageSize) {
 			return -1;
 		}
 
@@ -1024,7 +1022,7 @@ public class UserProcess {
 		}
 
 		// bytes buffer
-		byte[] byteBuffer = new byte[pageSize];
+		byte[] byteBuffer;
 		// virtual address of buffer
 		int vaBuffer = buffer;
 		// total bytes to read and write to virtual memory
@@ -1040,8 +1038,11 @@ public class UserProcess {
 
 			// determine to write the minimum between pageSize and bytesLeft
 			int bufferSize = Math.min(pageSize, bytesLeft);
+			//
+			byteBuffer = new byte[bufferSize];
+
 			// check for valid vaBuffer
-			if (vaBuffer < 0 || vaBuffer >= numPages * pageSize) {
+			if (vaBuffer < 0 || vaBuffer > numPages * pageSize) {
 				return -1;
 			}
 			// read user buffer into the local buffer
@@ -1224,7 +1225,7 @@ public class UserProcess {
 			case syscallExec:
 				// a0 is the name, a1 and a2 are argc and argv respectively
 				return handleExec(a0, a1, a2);
-			// join system call to implement	
+			// join system call to implement
 			case syscallJoin:
 				// a0 is PID and a1 is th status
 				return handleJoin(a0, a1);
@@ -1324,13 +1325,13 @@ public class UserProcess {
 	private static final int pageSize = Processor.pageSize;
 
 	private static final char dbgProcess = 'a';
-	
+
 	// keep track of the number of total processes in the system
 	private static int totalProcesses = 0;
 
 	// process information
 	private boolean isRootProcess;
-	private static boolean rootProcessCreated = false; 
+	private static boolean rootProcessCreated = false;
 
 	// indicates if the process exited due to an unhandled exception
 	private boolean exitedNormally = true;
@@ -1350,7 +1351,6 @@ public class UserProcess {
 	private HashMap<Integer, Integer> childrenExitStatuses = new HashMap<Integer, Integer>();
 	// data structure that holds every process
 	private static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
-	
 
 	// Synchronization Support
 	private static Lock updatePIDLock = new Lock();
@@ -1360,16 +1360,16 @@ public class UserProcess {
 
 	/**
 	 * this method gets the next available PID
-	 * It first checks to see if any recycled PIDS are available, 
-	 * else it simply assigns the next available PID if no recycled 
+	 * It first checks to see if any recycled PIDS are available,
+	 * else it simply assigns the next available PID if no recycled
 	 * PIDS exist
 	 * 
-	 * @return the next available PID 
+	 * @return the next available PID
 	 */
 	public static int getNextAvailablePID() {
 		// check if there are recycled PIDS. If none,
 		// simply return the next PID
-		if(recycledPIDS.isEmpty()){
+		if (recycledPIDS.isEmpty()) {
 			return (nextPID++);
 		} else {
 			// remove the first avalable and recycled PID
@@ -1380,7 +1380,7 @@ public class UserProcess {
 	/**
 	 * This method recycles PIDS for reuse by the OS when making new processes
 	 */
-	public static void recyclePID(int pid){
+	public static void recyclePID(int pid) {
 		// add the PID to the pool of recycled PIDs
 		recycledPIDS.add(pid);
 	}
@@ -1388,7 +1388,7 @@ public class UserProcess {
 	/**
 	 * setter method for current process parent ID
 	 */
-	public void setParentID(int pid){
+	public void setParentID(int pid) {
 		this.parentPID = pid;
 	}
 
@@ -1397,14 +1397,14 @@ public class UserProcess {
 	 * 
 	 * @return current parent PID
 	 */
-	public int getParentID(){
+	public int getParentID() {
 		return this.parentPID;
 	}
 
 	/**
 	 * setter method for current process ID
 	 */
-	public void setCurrentID(int pid){
+	public void setCurrentID(int pid) {
 		this.currentPID = pid;
 	}
 
@@ -1413,14 +1413,16 @@ public class UserProcess {
 	 * 
 	 * @return current PID
 	 */
-	public int getCurrentID(){
+	public int getCurrentID() {
 		return this.currentPID;
 	}
+
 	/**
 	 * getter method for current proccess exited normally
+	 * 
 	 * @return true or false, if it exited normally
 	 */
-	public boolean getProcessExitedNormally(){
+	public boolean getProcessExitedNormally() {
 		return this.exitedNormally;
 	}
 

@@ -1,5 +1,5 @@
 #include "syscall.h"
-#define BYTES 19
+#define BYTES 18
 int main (void){
     int bytesRead = 0;
     int fieldDescriptor;
@@ -7,7 +7,7 @@ int main (void){
     char expected[] = "CSS ROCKS MY SOCKS";
     // read from keyboard input
     printf("Bytes Read: %d\n", bytesRead);
-    bytesRead = read(fdStandardInput, buffer, BYTES);
+    bytesRead = read(0, buffer, BYTES);
     printf("Bytes Read: %d\n", bytesRead);
     if(bytesRead < 0){
         printf("Failed to read std input\n");
@@ -16,7 +16,7 @@ int main (void){
     }
     for(int i = 0; i < BYTES; i++){
     // print out STD INPUT info
-        printf("%c", buffer[i]);
+        printf("Buffer[i]: %c", buffer[i]);
         if(buffer[i] != expected[i]) {
             printf("%c != %c\n", buffer[i], expected[i]);
             close(fdStandardInput);

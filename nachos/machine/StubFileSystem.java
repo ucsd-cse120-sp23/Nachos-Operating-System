@@ -33,12 +33,11 @@ public class StubFileSystem implements FileSystem {
 
 		try {
 			return new StubOpenFile(name, truncate);
-		}
-		catch (IOException e) {
+		} catch (IOException e) {
 			return null;
 		}
 	}
-	
+
 	public int getOpenCount() {
 		return openCount;
 	}
@@ -107,22 +106,21 @@ public class StubFileSystem implements FileSystem {
 
 				if (truncate)
 					file.setLength(0);
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 			}
 		}
 
 		public int read(int pos, byte[] buf, int offset, int length) {
-			if (!open)
+			if (!open) {
 				return -1;
+			}
 
 			try {
 				delay();
 
 				file.seek(pos);
 				return Math.max(0, file.read(buf, offset, length));
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 				return -1;
 			}
 		}
@@ -137,8 +135,7 @@ public class StubFileSystem implements FileSystem {
 				file.seek(pos);
 				file.write(buf, offset, length);
 				return length;
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 				return -1;
 			}
 		}
@@ -146,8 +143,7 @@ public class StubFileSystem implements FileSystem {
 		public int length() {
 			try {
 				return (int) file.length();
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 				return -1;
 			}
 		}
@@ -160,8 +156,7 @@ public class StubFileSystem implements FileSystem {
 
 			try {
 				file.close();
-			}
-			catch (IOException e) {
+			} catch (IOException e) {
 			}
 		}
 

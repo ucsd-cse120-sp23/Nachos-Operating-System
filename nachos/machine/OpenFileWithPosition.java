@@ -11,7 +11,7 @@ public abstract class OpenFileWithPosition extends OpenFile {
 	 * the specified file system.
 	 * 
 	 * @param fileSystem the file system to which this file belongs.
-	 * @param name the name of the file, on that file system.
+	 * @param name       the name of the file, on that file system.
 	 */
 	public OpenFileWithPosition(FileSystem fileSystem, String name) {
 		super(fileSystem, name);
