@@ -284,7 +284,7 @@ public class UserProcess {
 			// get ppn fron vpn
 			int physicalPageNum = pageTable[virtualPageNum].ppn;
 
-			// check of physical page num is not out of bounds
+			// check if physical page num is not out of bounds
 			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
 				break;
 			}
@@ -593,7 +593,6 @@ public class UserProcess {
 		}
 
 		// if this is last running running process then terminate kernel
-		System.out.println("In handleExit, totalProcesses = " + totalProcesses);
 		if (totalProcesses == 1) {
 			Kernel.kernel.terminate();
 		}
@@ -950,29 +949,31 @@ public class UserProcess {
 
 			// check if read is valid
 			if (bytesRead == -1) {
-				return -1;
-				// or reached End of file break
-			} else if (bytesRead < bufferSize) {
-				// update in case byteread > 0 but still < buff size
-				totalBytesRead += bytesRead;
-				break;
-			}
-			// update total bytes read
-			totalBytesRead += bytesRead;
+				return -1;	
+			} 
 			// check for valid vaBuffer
 			if (vaBuffer < 0 || vaBuffer >= numPages * pageSize) {
 				return -1;
 			}
 			// write to virtual memory
 			int bytesWritten = writeVirtualMemory(vaBuffer, byteBuffer, 0, bytesRead);
+
 			// checking for errors in writting in virtual memory
 			if (bytesWritten < bytesRead) {
 				return -1;
+			}
+			// or reached End of file break
+			if (bytesRead < bufferSize) {
+				// update in case byteread > 0 but still < buff size
+				totalBytesRead += bytesRead;
+				break;
 			}
 			// update the number of bytes left to read
 			bytesLeft -= bytesRead;
 			// the virtual address to write to
 			vaBuffer += bytesRead;
+			// update total bytes read
+			totalBytesRead += bytesRead;
 		}
 		// return number of bytes read
 		return totalBytesRead;
