@@ -16,7 +16,7 @@ int main (void){
     }
     for(int i = 0; i < BYTES; i++){
     // print out STD INPUT info
-        printf("Buffer[i]: %c", buffer[i]);
+        printf("buffer[i]: %c \n", buffer[i]);
         if(buffer[i] != expected[i]) {
             printf("%c != %c\n", buffer[i], expected[i]);
             close(fdStandardInput);

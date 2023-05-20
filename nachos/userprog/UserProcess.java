@@ -1283,12 +1283,12 @@ public class UserProcess {
 				break;
 
 			default:
-				Lib.debug(dbgProcess, "Unexpected exception: "
-						+ Processor.exceptionNames[cause]);
-				Lib.assertNotReached("Unexpected exception");
 				// call handleExit
 				this.exitedNormally = false;
 				handleExit(0);
+				Lib.debug(dbgProcess, "Unexpected exception: "
+						+ Processor.exceptionNames[cause]);
+				Lib.assertNotReached("Unexpected exception");
 		}
 	}
 
