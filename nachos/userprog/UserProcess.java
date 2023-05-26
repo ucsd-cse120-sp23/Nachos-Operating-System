@@ -481,10 +481,9 @@ public class UserProcess {
 		for (int i = 0; i < numPages; i++) {
 			physPageNum = pageTable[i].ppn;
 			UserKernel.deallocatePage(physPageNum);
+			// empty out contents of page table
 			pageTable[i] = null;
 		}
-		// empty out contents of page table
-		// pageTable = null;
 	}
 
 	/**

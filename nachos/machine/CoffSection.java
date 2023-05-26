@@ -172,9 +172,7 @@ public class CoffSection {
 	 * @param ppn the physical page to load into.
 	 */
 	public void loadPage(int spn, int ppn) {
-		Lib.assertTrue(file != null);
-		// System.out.println("from coffsection file spn: " + spn + " numpages :" + numPages);
-		
+		Lib.assertTrue(file != null);		
 		Lib.assertTrue(spn >= 0 && spn < numPages);
 		Lib.assertTrue(ppn >= 0 && ppn < Machine.processor().getNumPhysPages());
 
