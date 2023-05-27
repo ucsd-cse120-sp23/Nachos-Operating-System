@@ -260,9 +260,8 @@ public class UserProcess {
 	public int writeVirtualMemory(int vaddr, byte[] data, int offset, int length) {
 		Lib.assertTrue(offset >= 0 && length >= 0
 				&& offset + length <= data.length);
-
+		// extract current memory
 		byte[] memory = Machine.processor().getMemory();
-
 		// make copies of the virtual address and offset
 		int currVaddr = vaddr;
 		int currOffset = offset;
@@ -278,12 +277,10 @@ public class UserProcess {
 			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
 				break;
 			}
-
 			// get offset from address
 			int vaOffset = Processor.offsetFromAddress(currVaddr);
 			// get ppn fron vpn
 			int physicalPageNum = pageTable[virtualPageNum].ppn;
-
 			// check if physical page num is not out of bounds
 			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
 				break;

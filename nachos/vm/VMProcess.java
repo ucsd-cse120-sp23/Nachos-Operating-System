@@ -1,7 +1,7 @@
 package nachos.vm;
 
 import java.lang.reflect.Array;
-import java.security.acl.LastOwnerException;
+//import java.security.acl.LastOwnerException;
 
 import nachos.machine.*;
 import nachos.threads.*;
@@ -56,7 +56,6 @@ public class VMProcess extends UserProcess {
 		// page table entry reference
 		TranslationEntry pageTableEntry;
 		// physical page number reference
-		int physPageNum;
 		int vpn = 0;
 		// load sections
 		for (int s = 0; s < coff.getNumSections(); s++) {
@@ -73,15 +72,10 @@ public class VMProcess extends UserProcess {
 					return false;
 				}
 				// allocate a physical page
-				physPageNum = UserKernel.allocatePage();
-				// check if the physical page was allocated
-				if (physPageNum == -1) {
-					return false;
-				}
 				// set if the page isReadable according to the section constraint
 				isReadable = section.isReadOnly();
 				// create new table entry with valid set to false
-				pageTableEntry = new TranslationEntry(vpn, physPageNum, false, isReadable, false, false);
+				pageTableEntry = new TranslationEntry(vpn, -1, false, isReadable, false, false);
 				// insert the entry into the page table
 				pageTable[vpn] = pageTableEntry;
 			}
@@ -94,13 +88,9 @@ public class VMProcess extends UserProcess {
 				return false;
 			}
 			// allocate a physical page
-			physPageNum = UserKernel.allocatePage();
 			// check if the physical page was allocated
-			if (physPageNum == -1) {
-				return false;
-			}
 			// create new table entry
-			pageTableEntry = new TranslationEntry(vpn, physPageNum, false, false, false, false);
+			pageTableEntry = new TranslationEntry(vpn, -1, false, false, false, false);
 			// insert the entry into the page table
 			pageTable[vpn] = pageTableEntry;
 		}
@@ -112,6 +102,159 @@ public class VMProcess extends UserProcess {
 	 */
 	protected void unloadSections() {
 		super.unloadSections();
+	}
+
+	/**
+	 * Transfer data from the specified array to this process's virtual memory.
+	 * This method handles address translation details. This method must
+	 * <i>not</i> destroy the current process if an error occurs, but instead
+	 * should return the number of bytes successfully copied (or zero if no data
+	 * could be copied). If the valid bit is not valid, we need to demand a page
+	 * from the operating system, else it will break if nothing was allocated
+	 * 
+	 * @param vaddr  the first byte of virtual memory to write.
+	 * @param data   the array containing the data to transfer.
+	 * @param offset the first byte to transfer from the array.
+	 * @param length the number of bytes to transfer from the array to virtual
+	 *               memory.
+	 * @return the number of bytes successfully transferred.
+	 *
+	 */
+	@Override
+	public int readVirtualMemory(int vaddr, byte[] data, int offset, int length) {
+		Lib.assertTrue(offset >= 0 && length >= 0 && offset + length <= data.length);
+
+		// extract current memory
+		byte[] memory = Machine.processor().getMemory();
+
+		// make copies of the virtual address and offset
+		int currVaddr = vaddr;
+		int currOffset = offset;
+		// set a local for the total number of bytes read
+		int totalBytesRead = 0;
+		// set bytes to read to the length
+		int bytesToRead = length;
+
+		// address translation for bytes to read
+		while (bytesToRead > 0 && currOffset < data.length) {
+			// get VPN from address
+			int virtualPageNum = Processor.pageFromAddress(currVaddr);
+			// check if the virtual page number is not out of bounds
+			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
+				break;
+			}
+			// extract the current page table entry specified by the virtual page number
+			TranslationEntry pEntry = pageTable[virtualPageNum];
+			// check if page table entry is valid 
+			if(!pEntry.valid){
+				// if preparing a demanded page failed, break out the loop
+				if (!prepareDemandedPage(Machine.processor())){
+					break;
+				}
+			}
+			// get offset from address
+			int vaOffset = Processor.offsetFromAddress(currVaddr);
+			// get ppn fron vpn
+			int physicalPageNum = pageTable[virtualPageNum].ppn;
+			// check of physical page num is not out of bounds
+			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
+				break;
+			}
+			// compute physical address
+			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
+			// Adjust the number of bytes to read based on the remaining length of the
+			// destination array
+			int remainingLength = data.length - currOffset;
+			int bytesRead = Math.min(bytesToRead, Math.min(pageSize - vaOffset, remainingLength));
+			System.arraycopy(memory, physicalAddr, data, currOffset, bytesRead);
+			// update page table entries 
+			pEntry.used = true;
+			// update the byte data, address data and offset date
+			currVaddr += bytesRead;
+			currOffset += bytesRead;
+			totalBytesRead += bytesRead;
+			bytesToRead -= bytesRead;
+		}
+		// return the total number of bytes that were successfully read
+		return totalBytesRead;
+	}
+	
+	/**
+	 * Transfer data from the specified array to this process's virtual memory.
+	 * This method handles address translation details. This method must
+	 * <i>not</i> destroy the current process if an error occurs, but instead
+	 * should return the number of bytes successfully copied (or zero if no data
+	 * could be copied). If the valid bit is not valid, we need to demand a page
+	 * from the operating system, else it will break if nothing was allocated.
+	 * 
+	 * @param vaddr  the first byte of virtual memory to write.
+	 * @param data   the array containing the data to transfer.
+	 * @param offset the first byte to transfer from the array.
+	 * @param length the number of bytes to transfer from the array to virtual
+	 *               memory.
+	 * @return the number of bytes successfully transferred.
+	 */
+	@Override
+	public int writeVirtualMemory(int vaddr, byte[] data, int offset, int length) {
+		Lib.assertTrue(offset >= 0 && length >= 0
+				&& offset + length <= data.length);
+		// extract current memory
+		byte[] memory = Machine.processor().getMemory();
+		// make copies of the virtual address and offset
+		int currVaddr = vaddr;
+		int currOffset = offset;
+		// set a local for the total number of bytes read
+		int totalBytesWritten = 0;
+		// set bytes to read to the length
+		int bytesToWrite = length;
+		// adress translation for bytes to read
+		while (bytesToWrite > 0 && currOffset < data.length) {
+			// get VPN from address
+			int virtualPageNum = Processor.pageFromAddress(currVaddr);
+			// check if the virtual page number is not out of bounds
+			if (virtualPageNum < 0 || virtualPageNum >= pageTable.length) {
+				break;
+			}
+			// extract the current page table entry specified by the virtual page number
+			TranslationEntry pEntry = pageTable[virtualPageNum];
+			// check if page table entry is valid 
+			if(!pEntry.valid){
+				// if preparing a demanded page failed, break out the loop
+				if (!prepareDemandedPage(Machine.processor())){
+					break;
+				}
+			}
+			// get offset from address
+			int vaOffset = Processor.offsetFromAddress(currVaddr);
+			// get ppn fron vpn
+			int physicalPageNum = pageTable[virtualPageNum].ppn;
+			// check if physical page num is not out of bounds
+			if (physicalPageNum < 0 || physicalPageNum >= Machine.processor().getNumPhysPages()) {
+				break;
+			}
+			// compute physical address
+			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
+			// max amount of single copy
+			// int bytesWritten = Math.min(bytesToWrite, pageSize - vaOffset); //
+			// Math.min(length, pageSize - vaOffset);
+			// Adjust the number of bytes to read based on the remaining length of the
+			// destination array
+			int remainingLength = data.length - currOffset;
+			int bytesWritten = Math.min(bytesToWrite, Math.min(pageSize - vaOffset, remainingLength));
+			System.arraycopy(data, currOffset, memory, physicalAddr, bytesWritten);
+			// update page table entries 
+			pEntry.used = true;
+			pEntry.dirty = true;
+			
+			// update the byte data, address data and offset date
+			currVaddr += bytesWritten;
+			currOffset += bytesWritten;
+			totalBytesWritten += bytesWritten;
+			bytesToWrite -= bytesWritten;
+		}
+
+		// return the total number of bytes that were successfully written
+		return totalBytesWritten;
 	}
 
 	/**
@@ -147,11 +290,11 @@ public class VMProcess extends UserProcess {
 		// extract the bad virtual adress 
 		int badAddress = p.readRegister(Processor.regBadVAddr);
 		// extract the bad virtual page number from the bad virtual address
+
 		int badVPN = Processor.pageFromAddress(badAddress);
+
 		// get the page table entry for the bad virtual page number
 		TranslationEntry pTEntry = super.pageTable[badVPN];
-		// extract the page table entries phycsical page number
-		int ppn = pTEntry.ppn;
 
 		// if the virtual page number is an invalid one, return false
 		if (badVPN < 0 || badVPN >= super.pageTable.length){
@@ -170,14 +313,21 @@ public class VMProcess extends UserProcess {
 			
 			// checking to see if faulting page is within current section
 			if (badVPN >= lowVPN && badVPN < upperVPN){
+				// allocate a physical page
+				int ppn = UserKernel.allocatePage();
+				// check if the physical page was allocated
+				if (ppn == -1) {
+					return false;
+				}
 				// create a new array that is completely zeroed out of size "pageSize"
 				byte[] zeroedArray = new byte[pageSize];
 				// source, source pos, dest. dest pos, length
-				System.arraycopy(zeroedArray, 0, p.getMemory(), ppn, pageSize);
+				System.arraycopy(zeroedArray, 0, p.getMemory(), ppn * pageSize, pageSize);
 				
 				// load section into physical 
-				section.loadPage(badVPN, ppn);
+				section.loadPage(badVPN - lowVPN, ppn);
 				//update corresponding bits to valid 
+				pTEntry.ppn = ppn;
 				pTEntry.valid = true;
 				pTEntry.readOnly = section.isReadOnly();
 				pTEntry.used = true;
@@ -186,17 +336,23 @@ public class VMProcess extends UserProcess {
 
 		}
 		// else if faulting page is from its any other section 
+		// allocate physical page
+		int ppn = UserKernel.allocatePage();
+		// check if the physical page was allocated
+		if (ppn == -1) {
+			return false;
+		}
 		// zero contents of page
 		// create a new array that is completely zeroed out of size "pageSize"
 		byte[] zeroedArray = new byte[pageSize];
 		// source, source pos, dest. dest pos, length
-		System.arraycopy(zeroedArray, 0, p.getMemory(), ppn, pageSize);
+		System.arraycopy(zeroedArray, 0, p.getMemory(), ppn * pageSize, pageSize);
 
 		// update entries 
+		pTEntry.ppn = ppn;
 		pTEntry.valid = true;
 		pTEntry.readOnly = false;
 		pTEntry.used = true;
-
 
 		return true;
 	}
