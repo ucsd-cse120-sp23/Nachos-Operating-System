@@ -1,13 +1,13 @@
 package nachos.vm;
 
 import java.lang.reflect.Array;
-//import java.security.acl.LastOwnerException;
 
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
 import nachos.vm.*;
 import java.util.Arrays;
+import java.util.HashMap;
 
 /**
  * A <tt>UserProcess</tt> that supports demand-paging.
@@ -94,6 +94,7 @@ public class VMProcess extends UserProcess {
 			// insert the entry into the page table
 			pageTable[vpn] = pageTableEntry;
 		}
+
 		return true;	
 	}
 
@@ -148,7 +149,8 @@ public class VMProcess extends UserProcess {
 			// check if page table entry is valid 
 			if(!pEntry.valid){
 				// if preparing a demanded page failed, break out the loop
-				if (!prepareDemandedPage(Machine.processor())){
+				// bad address = vpn * pagesize
+				if (!prepareDemandedPage(pEntry.vpn * pageSize)){
 					break;
 				}
 			}
@@ -220,7 +222,8 @@ public class VMProcess extends UserProcess {
 			// check if page table entry is valid 
 			if(!pEntry.valid){
 				// if preparing a demanded page failed, break out the loop
-				if (!prepareDemandedPage(Machine.processor())){
+				// bad address = vpn * pagesize
+				if (!prepareDemandedPage(pEntry.vpn * pageSize)){
 					break;
 				}
 			}
@@ -234,9 +237,7 @@ public class VMProcess extends UserProcess {
 			}
 			// compute physical address
 			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
-			// max amount of single copy
-			// int bytesWritten = Math.min(bytesToWrite, pageSize - vaOffset); //
-			// Math.min(length, pageSize - vaOffset);
+			
 			// Adjust the number of bytes to read based on the remaining length of the
 			// destination array
 			int remainingLength = data.length - currOffset;
@@ -269,7 +270,13 @@ public class VMProcess extends UserProcess {
 
 		switch (cause) {
 			case pageFault:
-				if (prepareDemandedPage(processor)){
+			// determine cause of fault either out of physical pags
+				if (UserKernel.getNumOfFreePages() == 0){
+					selectVictimPage();
+				}
+			// or entry is invalid 
+				int badAddr = processor.readRegister(processor.regBadVAddr);
+				if (prepareDemandedPage(badAddr)){
 					return;
 				}
 				super.handleException(cause);
@@ -286,11 +293,11 @@ public class VMProcess extends UserProcess {
 	 * @param p processor object 
 	 * @return boolean if page was allocated
 	 */
-	public boolean prepareDemandedPage(Processor p) {
+	public boolean prepareDemandedPage(int badAddress) {
 		// extract the bad virtual adress 
-		int badAddress = p.readRegister(Processor.regBadVAddr);
+		// int badAddress = processor.readRegister(Processor.regBadVAddr);
 		// extract the bad virtual page number from the bad virtual address
-
+		
 		int badVPN = Processor.pageFromAddress(badAddress);
 
 		// get the page table entry for the bad virtual page number
@@ -319,11 +326,13 @@ public class VMProcess extends UserProcess {
 				if (ppn == -1) {
 					return false;
 				}
-				// create a new array that is completely zeroed out of size "pageSize"
-				byte[] zeroedArray = new byte[pageSize];
-				// source, source pos, dest. dest pos, length
-				System.arraycopy(zeroedArray, 0, p.getMemory(), ppn * pageSize, pageSize);
-				
+				// get current process id 
+				int pID = super.getCurrentID();
+				// store the mapping of the physical page to the current process
+				updateIPTLock.acquire();
+				invertedPageTable.put(ppn,pID);
+				updateIPTLock.release();
+
 				// load section into physical 
 				section.loadPage(badVPN - lowVPN, ppn);
 				//update corresponding bits to valid 
@@ -342,11 +351,19 @@ public class VMProcess extends UserProcess {
 		if (ppn == -1) {
 			return false;
 		}
+		// get current process id
+		int pID = super.getCurrentID();
+		// acquire the lock to update the IPT
+		updateIPTLock.acquire();
+		// store the mapping of the physical page to the current process
+		invertedPageTable.put(ppn,pID);
+		// release the lock
+		updateIPTLock.release();
 		// zero contents of page
 		// create a new array that is completely zeroed out of size "pageSize"
 		byte[] zeroedArray = new byte[pageSize];
 		// source, source pos, dest. dest pos, length
-		System.arraycopy(zeroedArray, 0, p.getMemory(), ppn * pageSize, pageSize);
+		System.arraycopy(zeroedArray, 0, Machine.processor().getMemory(), ppn * pageSize, pageSize);
 
 		// update entries 
 		pTEntry.ppn = ppn;
@@ -364,4 +381,40 @@ public class VMProcess extends UserProcess {
 	private static final char dbgVM = 'v';
 
 	private static final int pageFault = Processor.exceptionPageFault;
+	
+	// initialize this clock hand to be 0
+	private static int clockHand = 0;
+
+	// initialize a lock for synchronization and editing of the clock hand static varaible
+	private static Lock updateClockHandLock = new Lock();
+
+	private static Lock updateIPTLock = new Lock();
+	
+	// data structure that represents an inverted page table, mapping ppn's (key)
+	// to a user processes' PID (value)
+	private static HashMap<Integer, Integer> invertedPageTable;
+	
+	/**
+	 * This method is a clock algorithm method designed to select a victim page
+	 * to evict from memory
+	 * @return the victim page to be evicted
+	 */
+	public static int selectVictimPage(){
+		//
+		updateClockHandLock.acquire();
+		// check the used bit for each translationEntry
+		//while(pageTable[clockHand].used == true) {
+			// set the used bit to 0
+		//	pageTable[clockHand].used = false;
+			// increment the clockhand
+
+		//}
+
+
+		updateClockHandLock.release();
+		
+		return 0;
+	}
+
+
 }

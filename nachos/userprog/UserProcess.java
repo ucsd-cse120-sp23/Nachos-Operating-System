@@ -1353,7 +1353,6 @@ public class UserProcess {
 	private static Condition cvPID = new Condition(updatePIDLock);
 	private static Lock updateProcessLock = new Lock();
 	private static Condition cvProcesses = new Condition(updateProcessLock);
-
 	/**
 	 * this method gets the next available PID
 	 * It first checks to see if any recycled PIDS are available,
