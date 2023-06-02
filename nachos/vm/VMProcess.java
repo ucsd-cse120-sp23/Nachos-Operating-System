@@ -6,8 +6,12 @@ import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
 import nachos.vm.*;
+import java.util.*;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.AbstractMap.SimpleEntry;
 
 /**
  * A <tt>UserProcess</tt> that supports demand-paging.
@@ -272,6 +276,7 @@ public class VMProcess extends UserProcess {
 			case pageFault:
 			// determine cause of fault either out of physical pags
 				if (UserKernel.getNumOfFreePages() == 0){
+					System.out.println("out of physical pages");
 					selectVictimPage();
 				}
 			// or entry is invalid 
@@ -330,7 +335,10 @@ public class VMProcess extends UserProcess {
 				int pID = super.getCurrentID();
 				// store the mapping of the physical page to the current process
 				updateIPTLock.acquire();
-				invertedPageTable.put(ppn,pID);
+				// store process ID with VPN mapping will be useful for checking 
+				// process' page table
+				Entry<Integer, Integer> pidVPNEntry = new SimpleEntry<Integer, Integer>(pID, badVPN);
+				VMKernel.invertedPageTable.put(ppn, pidVPNEntry);
 				updateIPTLock.release();
 
 				// load section into physical 
@@ -356,7 +364,8 @@ public class VMProcess extends UserProcess {
 		// acquire the lock to update the IPT
 		updateIPTLock.acquire();
 		// store the mapping of the physical page to the current process
-		invertedPageTable.put(ppn,pID);
+		Entry<Integer, Integer> pidVPNEntry = new SimpleEntry<Integer, Integer>(pID, badVPN);
+		VMKernel.invertedPageTable.put(ppn,pidVPNEntry);
 		// release the lock
 		updateIPTLock.release();
 		// zero contents of page
@@ -389,29 +398,56 @@ public class VMProcess extends UserProcess {
 	private static Lock updateClockHandLock = new Lock();
 
 	private static Lock updateIPTLock = new Lock();
-	
-	// data structure that represents an inverted page table, mapping ppn's (key)
-	// to a user processes' PID (value)
-	private static HashMap<Integer, Integer> invertedPageTable;
-	
+		
 	/**
 	 * This method is a clock algorithm method designed to select a victim page
 	 * to evict from memory
 	 * @return the victim page to be evicted
 	 */
 	public static int selectVictimPage(){
-		//
-		updateClockHandLock.acquire();
-		// check the used bit for each translationEntry
-		//while(pageTable[clockHand].used == true) {
-			// set the used bit to 0
-		//	pageTable[clockHand].used = false;
-			// increment the clockhand
+		// updateClockHandLock.acquire();
+		
+		int ppn = clockHand;
+		int initialClockHand = clockHand;
+		
+		// check all ppns from initialClockHand to initialClockHand - 1 
+		do {
+			// check that the physical page is actually in use by a process
+			if(VMKernel.invertedPageTable.get(ppn) == null) {
+				// check the next physical page
+				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
+				continue;
+			}
+			// extract process and VPN entry from the PPN
+			Entry<Integer, Integer> pIDToVPNEntry = VMKernel.invertedPageTable.get(ppn);
+			// extract the PID
+			Integer pIDFromPage = pIDToVPNEntry.getKey();
+			// extract the VPN
+			int vpn = pIDToVPNEntry.getValue();
+			// extract the UserProcess Object
+			UserProcess processFromPage = UserProcess.currentProcesses.get(pIDFromPage);
+			// extract the translationEntry associated with the VPN
+			TranslationEntry ptEntry = processFromPage.getTranslationEntry(vpn);
+			// check entry used bit
+			if (ptEntry.used == true){
+				// if used then set to false and check next entry
+				ptEntry.used = false;
+				// increment ppn 
+				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
+			}
+			// found page to evict
+			else{
+				ptEntry.valid = false;
+				clockHand = ppn;
+				break;
+			} 
+		} while(ppn != initialClockHand);
+		
 
-		//}
+		
 
 
-		updateClockHandLock.release();
+		// updateClockHandLock.release();
 		
 		return 0;
 	}

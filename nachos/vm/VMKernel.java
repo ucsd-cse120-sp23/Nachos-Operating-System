@@ -1,5 +1,8 @@
 package nachos.vm;
 
+import java.util.HashMap;
+import java.util.Map.Entry;
+
 import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
@@ -48,4 +51,10 @@ public class VMKernel extends UserKernel {
 	private static VMProcess dummy1 = null;
 
 	private static final char dbgVM = 'v';
+
+	// data structure that represents an inverted page table, mapping PPNs (key)
+	// to a user processes' PID and VPN (value)
+	public static HashMap<Integer, Entry<Integer,Integer>> invertedPageTable = new HashMap<Integer, Entry<Integer,Integer>>();
+
+
 }

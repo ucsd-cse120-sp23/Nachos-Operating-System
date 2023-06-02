@@ -1346,7 +1346,7 @@ public class UserProcess {
 	// data structure to hold children exit statuses K = PID, V = exit status
 	private HashMap<Integer, Integer> childrenExitStatuses = new HashMap<Integer, Integer>();
 	// data structure that holds every process
-	private static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
+	protected static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
 
 	// Synchronization Support
 	private static Lock updatePIDLock = new Lock();
@@ -1419,6 +1419,10 @@ public class UserProcess {
 	 */
 	public boolean getProcessExitedNormally() {
 		return this.exitedNormally;
+	}
+	// getter method to get a translation entry from a process' pageTable
+	public TranslationEntry getTranslationEntry(int vpn) {
+		return this.pageTable[vpn];
 	}
 
 }
