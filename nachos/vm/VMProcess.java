@@ -294,25 +294,51 @@ public class VMProcess extends UserProcess {
 	}
 
 	/**
-	 * This method 
-	 * @param p processor object 
+	 * This method prepares a page on demand
+	 * @param p int badAddress which is the bad adress that caused the page fault
 	 * @return boolean if page was allocated
 	 */
 	public boolean prepareDemandedPage(int badAddress) {
-		// extract the bad virtual adress 
-		// int badAddress = processor.readRegister(Processor.regBadVAddr);
 		// extract the bad virtual page number from the bad virtual address
-		
 		int badVPN = Processor.pageFromAddress(badAddress);
-
-		// get the page table entry for the bad virtual page number
-		TranslationEntry pTEntry = super.pageTable[badVPN];
-
+		
 		// if the virtual page number is an invalid one, return false
 		if (badVPN < 0 || badVPN >= super.pageTable.length){
 			return false;
 		}
-		
+
+		// get the page table entry for the bad virtual page number
+		TranslationEntry pTEntry = super.pageTable[badVPN];
+		/////////////////////////// swap file ////////////////////////////////
+		// first must check page fault due to swapped page
+		if (!pTEntry.valid && pTEntry.dirty && (pTEntry.ppn != -1)) {
+			// extract the spn from the entries ppn, as this is where we stored the spn
+			int spn = pTEntry.ppn;
+			// allocate physical page
+			int ppn = UserKernel.allocatePage();
+			// check if the physical page was allocated
+			if (ppn == -1) {
+				return false;
+			}
+			// get current process id 
+			int pID = super.getCurrentID();
+			// store the mapping of the physical page to the current process
+			updateIPTLock.acquire();
+			// store process ID with VPN mapping will be useful for checking 
+			// process' page table
+			Entry<Integer, Integer> pidVPNEntry = new SimpleEntry<Integer, Integer>(pID, badVPN);
+			VMKernel.invertedPageTable.put(ppn, pidVPNEntry);
+			updateIPTLock.release();
+
+			// read the page from swap file into physical memory
+			VMKernel.swapFile.read(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
+			pTEntry.ppn = ppn;
+			pTEntry.valid = true;
+			pTEntry.used = true;
+			pTEntry.dirty = false;
+			return true;
+		}
+		//////////////////////// coff section /////////////////////////////////
 		// if faulting page is from coff sections 
 		// load page into memory 
 		for (int s = 0; s < coff.getNumSections(); s++) {
@@ -352,6 +378,7 @@ public class VMProcess extends UserProcess {
 			}
 
 		}
+		///////////////////////////////// stack or other ///////////////////////////////////////
 		// else if faulting page is from its any other section 
 		// allocate physical page
 		int ppn = UserKernel.allocatePage();
@@ -406,7 +433,7 @@ public class VMProcess extends UserProcess {
 	 */
 	public static int selectVictimPage(){
 		// updateClockHandLock.acquire();
-		
+		System.out.println("evicting page ...");
 		int ppn = clockHand;
 		int initialClockHand = clockHand;
 		
@@ -429,23 +456,37 @@ public class VMProcess extends UserProcess {
 			// extract the translationEntry associated with the VPN
 			TranslationEntry ptEntry = processFromPage.getTranslationEntry(vpn);
 			// check entry used bit
-			if (ptEntry.used == true){
+			if (ptEntry.used){
 				// if used then set to false and check next entry
 				ptEntry.used = false;
 				// increment ppn 
 				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
 			}
 			// found page to evict
-			else{
+			else {
+				int spn = -1;
+				if (ptEntry.dirty) {
+					// if all free spns have been taken, add more spns to the list
+					if(VMKernel.getNumOfFreeSPNS() == 0){
+						VMKernel.addMoreSPNSToList();
+					}
+					
+					// get spn number to write in file
+					spn = VMKernel.allocateSPN();
+					
+					// write physical page to swap file at the position indicated by the spn
+					VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(), ptEntry.ppn * pageSize, pageSize);
+				}
+				
+				// invalidate Valid entry 
 				ptEntry.valid = false;
+				// store position in pagetable entry
+				ptEntry.ppn = spn;
+
 				clockHand = ppn;
 				break;
 			} 
 		} while(ppn != initialClockHand);
-		
-
-		
-
 
 		// updateClockHandLock.release();
 		
