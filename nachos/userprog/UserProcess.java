@@ -371,7 +371,6 @@ public class UserProcess {
 		numPages++;
 		if (!loadSections())
 			return false;
-
 		// store arguments in last page
 		int entryOffset = (numPages - 1) * pageSize;
 		int stringOffset = entryOffset + args.length * 4;
@@ -400,8 +399,7 @@ public class UserProcess {
 	 * @return <tt>true</tt> if the sections were successfully loaded.
 	 */
 	protected boolean loadSections() {
-		// Machine.processor().getNumPhysPages() --> removed
-		if (numPages > UserKernel.getNumOfFreePages()) {
+		if (numPages > Machine.processor().getNumPhysPages()) {
 			coff.close();
 			Lib.debug(dbgProcess, "\tinsufficient physical memory");
 			return false;

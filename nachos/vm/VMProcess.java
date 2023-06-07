@@ -46,14 +46,14 @@ public class VMProcess extends UserProcess {
 	 * 
 	 * @return <tt>true</tt> if successful.
 	 */
+	@Override
 	protected boolean loadSections() {
-		if (numPages > UserKernel.getNumOfFreePages()) {
-			coff.close();
-			Lib.debug(dbgProcess, "\tinsufficient physical memory");
-			return false;
-		}
-		// allocate page table, size of pagetable should be numPages as
-		// this is a linear style table
+		System.out.println("loading sections from VMKernal ");
+		// // if (numPages > UserKernel.getNumOfFreePages()) {
+		// 	coff.close();
+		// 	Lib.debug(dbgProcess, "\tinsufficient physical memory");
+		// 	// return false;
+		// }
 		pageTable = new TranslationEntry[numPages];
 		// boolean isReadable variable for if the section is readable
 		boolean isReadable;
@@ -82,6 +82,7 @@ public class VMProcess extends UserProcess {
 				pageTableEntry = new TranslationEntry(vpn, -1, false, isReadable, false, false);
 				// insert the entry into the page table
 				pageTable[vpn] = pageTableEntry;
+
 			}
 		}
 		// reserve pages for stack and args
@@ -276,8 +277,11 @@ public class VMProcess extends UserProcess {
 			case pageFault:
 			// determine cause of fault either out of physical pags
 				if (UserKernel.getNumOfFreePages() == 0){
-					System.out.println("out of physical pages");
-					selectVictimPage();
+					// System.out.println("out of physical pages");
+					if(selectVictimPage() == 0){
+						return;
+					}
+					
 				}
 			// or entry is invalid 
 				int badAddr = processor.readRegister(processor.regBadVAddr);
@@ -461,10 +465,13 @@ public class VMProcess extends UserProcess {
 				ptEntry.used = false;
 				// increment ppn 
 				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
+
+				// System.out.println("ppn incremented");
 			}
 			// found page to evict
 			else {
 				int spn = -1;
+				// if page is dirty must write out to swap
 				if (ptEntry.dirty) {
 					// if all free spns have been taken, add more spns to the list
 					if(VMKernel.getNumOfFreeSPNS() == 0){
@@ -473,23 +480,35 @@ public class VMProcess extends UserProcess {
 					
 					// get spn number to write in file
 					spn = VMKernel.allocateSPN();
-					
+					System.out.println("Swap file page number "+spn);
+					System.out.println("Clock hand: = " + ppn + ", pt entry ppn: "+ ptEntry.ppn);
 					// write physical page to swap file at the position indicated by the spn
-					VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(), ptEntry.ppn * pageSize, pageSize);
+					VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
+					
 				}
 				
+				//System.out.println("Invalidating entry breaking loop...");
+
 				// invalidate Valid entry 
 				ptEntry.valid = false;
 				// store position in pagetable entry
 				ptEntry.ppn = spn;
+				// set clockhand to point to the physical page next to the evicted page
+				clockHand = (ppn + 1) % Machine.processor().getNumPhysPages();
+				
+				// remove the entry from the IPT
+				updateIPTLock.acquire();
+				VMKernel.invertedPageTable.remove(ppn);
+				updateIPTLock.release();
 
-				clockHand = ppn;
+				// add this page back to the list of free physical pages
+				UserKernel.deallocatePage(ppn);
 				break;
 			} 
 		} while(ppn != initialClockHand);
 
 		// updateClockHandLock.release();
-		
+		System.out.println("page evicted");
 		return 0;
 	}
 

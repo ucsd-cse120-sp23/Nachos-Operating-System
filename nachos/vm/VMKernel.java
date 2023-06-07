@@ -26,8 +26,9 @@ public class VMKernel extends UserKernel {
 		super.initialize(args);
 		freeSpnList = new LinkedList<Integer>();
 		freeSPNLock = new Lock();
+		updateCurrSPNLock = new Lock();
 		invertedPageTable = new HashMap<Integer, Entry<Integer,Integer>>();
-		swapFile =  ThreadedKernel.fileSystem.open("swapFile",true);
+		swapFile =  ThreadedKernel.fileSystem.open("swapFile", true);
 	}
 
 	/**
@@ -48,6 +49,8 @@ public class VMKernel extends UserKernel {
 	 * Terminate this kernel. Never returns.
 	 */
 	public void terminate() {
+		swapFile.close();
+		ThreadedKernel.fileSystem.remove("swapFile");
 		super.terminate();
 	}
 
@@ -67,6 +70,10 @@ public class VMKernel extends UserKernel {
 
 	// declare a lock for free spn editing
 	private static Lock freeSPNLock;
+
+	// declare a lock for updating the current spn
+	private static Lock updateCurrSPNLock;
+
 	// declare a freeSpnList, which is used for SPNS for our swap file
 	private static LinkedList<Integer> freeSpnList;
 
@@ -122,14 +129,12 @@ public class VMKernel extends UserKernel {
 	 * this method will add a certain amount of spns to the spnlist
 	 */
 	public static void addMoreSPNSToList(){
-		// acquire the lock
-		freeSPNLock.acquire();
 		// allocate a total of 100 additional spns
 		for(int i = currentSPN; i < currentSPN + NUM_OF_SPNS_TO_ALLOCATE; i++){
 			deallocateSPN(i);
 		}
+		updateCurrSPNLock.acquire();
 		currentSPN += NUM_OF_SPNS_TO_ALLOCATE;
-		// release the lock
-		freeSPNLock.release();
+		updateCurrSPNLock.release();
 	}
 }
