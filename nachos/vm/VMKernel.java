@@ -28,6 +28,7 @@ public class VMKernel extends UserKernel {
 		freeSPNLock = new Lock();
 		updateCurrSPNLock = new Lock();
 		invertedPageTable = new HashMap<Integer, Entry<Integer,Integer>>();
+		vpnToSpnMap = new HashMap<Integer,Integer>();
 		swapFile =  ThreadedKernel.fileSystem.open("swapFile", true);
 	}
 
@@ -65,8 +66,8 @@ public class VMKernel extends UserKernel {
 	// swap file 
 	public static OpenFile swapFile;
 
-
-
+	// data structure to hold vpn to spn mappings
+	public static HashMap<Integer, Integer> vpnToSpnMap;
 
 	// declare a lock for free spn editing
 	private static Lock freeSPNLock;
@@ -81,7 +82,7 @@ public class VMKernel extends UserKernel {
 	private static int currentSPN = 0;
 
 	// constant for SPN increase
-	private final static int NUM_OF_SPNS_TO_ALLOCATE = 100;
+	private final static int NUM_OF_SPNS_TO_ALLOCATE = 5;
 
 	/**
 	 * This method allocates a spn by removing a free spn from our linked list of

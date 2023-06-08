@@ -1423,4 +1423,8 @@ public class UserProcess {
 		return this.pageTable[vpn];
 	}
 
+	public TranslationEntry[] getPageTable(){
+		return this.pageTable;
+	}
+
 }

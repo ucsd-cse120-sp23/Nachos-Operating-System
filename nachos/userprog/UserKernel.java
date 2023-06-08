@@ -192,4 +192,15 @@ public class UserKernel extends ThreadedKernel {
 	public static int getNumOfFreePages() {
 		return freePhysicalPages.size();
 	}
+
+	public static void printFreePages() {
+		int numOfFreePages = getNumOfFreePages();
+		if (freePhysicalPages.isEmpty()) {
+			System.out.println("NO FREE PPNS!");
+		} else {
+			for (int index = 0; index < numOfFreePages; index++) {
+				System.out.println("FREE PPN: " + freePhysicalPages.get(index));
+			}
+		}
+	}
 }
