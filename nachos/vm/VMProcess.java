@@ -49,11 +49,7 @@ public class VMProcess extends UserProcess {
 	@Override
 	protected boolean loadSections() {
 		System.out.println("loading sections from VMKernal ");
-		// // if (numPages > UserKernel.getNumOfFreePages()) {
-		// 	coff.close();
-		// 	Lib.debug(dbgProcess, "\tinsufficient physical memory");
-		// 	// return false;
-		// }
+		// define a new page table of size num pages
 		pageTable = new TranslationEntry[numPages];
 		// boolean isReadable variable for if the section is readable
 		boolean isReadable;
@@ -65,8 +61,8 @@ public class VMProcess extends UserProcess {
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			CoffSection section = coff.getSection(s);
 
-			Lib.debug(dbgProcess, "\tinitializing " + section.getName()
-					+ " section (" + section.getLength() + " pages)");
+			Lib.debug(dbgProcess, "\tinitializing " + section.getName() +
+					" section (" + section.getLength() + " pages)");
 
 			for (int i = 0; i < section.getLength(); i++) {
 				// get the virtual page number
@@ -100,7 +96,8 @@ public class VMProcess extends UserProcess {
 			pageTable[vpn] = pageTableEntry;
 		}
 
-		return true;	
+		// load sections was successful
+		return true;
 	}
 
 	/**
@@ -142,7 +139,7 @@ public class VMProcess extends UserProcess {
 		int bytesToRead = length;
 
 		// address translation for bytes to read
-		
+
 		while (bytesToRead > 0 && currOffset < data.length) {
 			// get VPN from address
 			int virtualPageNum = Processor.pageFromAddress(currVaddr);
@@ -153,12 +150,12 @@ public class VMProcess extends UserProcess {
 			// System.out.println("reading VPN " + virtualPageNum);
 			// extract the current page table entry specified by the virtual page number
 			TranslationEntry pEntry = pageTable[virtualPageNum];
-			// check if page table entry is valid 
-			if(!pEntry.valid){
+			// check if page table entry is valid
+			if (!pEntry.valid) {
 				// if preparing a demanded page failed, break out the loop
 				// bad address = vpn * pagesize
 				// System.out.println("faulting page" + virtualPageNum);
-				if (!prepareDemandedPage(pEntry.vpn * pageSize)){
+				if (!prepareDemandedPage(pEntry.vpn * pageSize)) {
 
 					break;
 				}
@@ -178,7 +175,7 @@ public class VMProcess extends UserProcess {
 			int remainingLength = data.length - currOffset;
 			int bytesRead = Math.min(bytesToRead, Math.min(pageSize - vaOffset, remainingLength));
 			System.arraycopy(memory, physicalAddr, data, currOffset, bytesRead);
-			// update page table entries 
+			// update page table entries
 			pEntry.used = true;
 			// update the byte data, address data and offset date
 			currVaddr += bytesRead;
@@ -189,7 +186,7 @@ public class VMProcess extends UserProcess {
 		// return the total number of bytes that were successfully read
 		return totalBytesRead;
 	}
-	
+
 	/**
 	 * Transfer data from the specified array to this process's virtual memory.
 	 * This method handles address translation details. This method must
@@ -207,8 +204,8 @@ public class VMProcess extends UserProcess {
 	 */
 	@Override
 	public int writeVirtualMemory(int vaddr, byte[] data, int offset, int length) {
-		Lib.assertTrue(offset >= 0 && length >= 0
-				&& offset + length <= data.length);
+		Lib.assertTrue(offset >= 0 && length >= 0 &&
+				offset + length <= data.length);
 		// extract current memory
 		byte[] memory = Machine.processor().getMemory();
 		// make copies of the virtual address and offset
@@ -230,13 +227,13 @@ public class VMProcess extends UserProcess {
 
 			// extract the current page table entry specified by the virtual page number
 			TranslationEntry pEntry = pageTable[virtualPageNum];
-			// check if page table entry is valid 
-			if(!pEntry.valid){
+			// check if page table entry is valid
+			if (!pEntry.valid) {
 				// if preparing a demanded page failed, break out the loop
 				// bad address = vpn * pagesize
 				// System.out.println("write fault VPN " + virtualPageNum);
 
-				if (!prepareDemandedPage(pEntry.vpn * pageSize)){
+				if (!prepareDemandedPage(pEntry.vpn * pageSize)) {
 					break;
 				}
 			}
@@ -250,16 +247,16 @@ public class VMProcess extends UserProcess {
 			}
 			// compute physical address
 			int physicalAddr = (pageSize * physicalPageNum) + vaOffset;
-			
+
 			// Adjust the number of bytes to read based on the remaining length of the
 			// destination array
 			int remainingLength = data.length - currOffset;
 			int bytesWritten = Math.min(bytesToWrite, Math.min(pageSize - vaOffset, remainingLength));
 			System.arraycopy(data, currOffset, memory, physicalAddr, bytesWritten);
-			// update page table entries 
+			// update page table entries
 			pEntry.used = true;
 			pEntry.dirty = true;
-			
+
 			// update the byte data, address data and offset date
 			currVaddr += bytesWritten;
 			currOffset += bytesWritten;
@@ -284,11 +281,12 @@ public class VMProcess extends UserProcess {
 		switch (cause) {
 			case pageFault:
 				int badAddr = processor.readRegister(processor.regBadVAddr);
-				if (prepareDemandedPage(badAddr)){
+				if (prepareDemandedPage(badAddr)) {
 					// System.out.println("prepared page on demand successful...");
 					return;
 				}
-				// System.out.println("failed to prepare page on demand, throwing execption...");
+				// System.out.println("failed to prepare page on demand, throwing
+				// execption...");
 				super.handleException(cause);
 				break;
 			default:
@@ -297,8 +295,10 @@ public class VMProcess extends UserProcess {
 
 		}
 	}
+
 	/**
 	 * This method prepares a page on demand
+	 * 
 	 * @param p int badAddress which is the bad adress that caused the page fault
 	 * @return boolean if page was allocated
 	 */
@@ -308,7 +308,7 @@ public class VMProcess extends UserProcess {
 		int badVPN = Processor.pageFromAddress(badAddress);
 		// if the virtual page number is an invalid one, return false
 		// System.out.println("VPN TO FIX: " + badVPN);
-		if (badVPN < 0 || badVPN >= super.pageTable.length){
+		if (badVPN < 0 || badVPN >= super.pageTable.length) {
 			return false;
 		}
 		// get the page table entry for the bad virtual page number
@@ -317,21 +317,24 @@ public class VMProcess extends UserProcess {
 		// UserKernel.printFreePages();
 		// try to allocate a physical page
 		int ppn = UserKernel.allocatePage();
-		// failed to allocated a physical page, so prepare to evict a page via clock algo
+		// failed to allocated a physical page, so prepare to evict a page via clock
+		// algo
 		if (ppn == -1) {
-			// call the clock algorithm, which returns a now available
+			// call the clock algorithm, which frees a ppn
 			ppn = selectVictimPage();
-			// remove victim page from list 
+			// remove victim page from list, since it was just freed
 			UserKernel.allocatePage();
 		}
 		// System.out.println("-------- After Allocation: ------------");
 		// UserKernel.printFreePages();
 		// System.out.println("PPN ALLOCATED " + ppn);
 
-		if(pTEntry.dirty){
+		// if the entry is dirty load it from the swap file
+		if (pTEntry.dirty) {
 			boolean wasSwapped = loadFromSwapFile(badVPN, ppn, pTEntry);
 			pageFaultLock.release();
 			return wasSwapped;
+			// else the entry is not dirty, try the coff or stack/args
 		} else {
 			// if the page is coff, load from it
 			if (loadFromCoffSection(badVPN, ppn, pTEntry)) {
@@ -339,7 +342,7 @@ public class VMProcess extends UserProcess {
 				// printInvertedPageTable();
 				pageFaultLock.release();
 				return true;
-			// else the page is stack/arg, load from it
+				// else the page is stack/arg, load from it
 			} else {
 				loadFromStackOrArgs(badVPN, ppn, pTEntry);
 				// printTranslationEntry(pTEntry);
@@ -349,21 +352,37 @@ public class VMProcess extends UserProcess {
 			}
 		}
 	}
-	public void updateIPT(int badVPN, int ppn){
+
+	/**
+	 * This method simply updates the inverted page table contents
+	 * 
+	 * @param badVPN vpn to update to
+	 * @param ppn    ppn to update to
+	 */
+	public void updateIPT(int badVPN, int ppn) {
 		// System.out.println("update IPT badvpn :"+ badVPN +" to ppn "+ ppn);
-		// get current process id 
+		// get current process id
 		int pID = super.getCurrentID();
 		// store the mapping of the physical page to the current process
 		updateIPTLock.acquire();
-		// store process ID with VPN mapping will be useful for checking process' page table
+		// store process ID with VPN mapping will be useful for checking process' page
+		// table
 		Entry<Integer, Integer> pidVPNEntry = new SimpleEntry<Integer, Integer>(pID, badVPN);
+		// update the IPT
 		VMKernel.invertedPageTable.put(ppn, pidVPNEntry);
 		updateIPTLock.release();
-
 	}
-	
-	public boolean loadFromCoffSection(int badVPN, int ppn, TranslationEntry pTEntry){
-		// if page is clean 
+
+	/**
+	 * This method tries to load a page from the coff section
+	 * 
+	 * @param badVPN  address of the faulting page
+	 * @param ppn     ppn to update to
+	 * @param pTEntry translation entry to update
+	 * @return true on succes or false on failure
+	 */
+	public boolean loadFromCoffSection(int badVPN, int ppn, TranslationEntry pTEntry) {
+		// if page is clean
 		for (int s = 0; s < coff.getNumSections(); s++) {
 			// extract the current coff section
 			CoffSection section = coff.getSection(s);
@@ -371,19 +390,20 @@ public class VMProcess extends UserProcess {
 			int lowVPN = section.getFirstVPN();
 			// get the current sections upper bound virtual page number
 			int upperVPN = lowVPN + section.getLength();
-			
+
 			// checking to see if faulting page is within current section
-			if (badVPN >= lowVPN && badVPN < upperVPN){
+			if (badVPN >= lowVPN && badVPN < upperVPN) {
 				// System.out.println("loading from coffsection....");
-				// load section into physical 
+				// load section into physical
 				section.loadPage(badVPN - lowVPN, ppn);
-				//update corresponding bits to valid 
+				// update corresponding bits to valid
 				pTEntry.ppn = ppn;
 				pTEntry.valid = true;
 				pTEntry.readOnly = section.isReadOnly();
 				pTEntry.used = true;
+				// update the IPT
 				updateIPT(badVPN, ppn);
-
+				// load from coff successful
 				return true;
 			}
 		}
@@ -391,41 +411,64 @@ public class VMProcess extends UserProcess {
 		return false;
 	}
 
-	public boolean loadFromStackOrArgs(int badVPN, int ppn, TranslationEntry pTEntry){
+	/**
+	 * This method simply tries to load a page from the stack or arguements
+	 * 
+	 * @param badVPN  address of the faulting page
+	 * @param ppn     ppn to update to
+	 * @param pTEntry translation entry to update
+	 * @return true as this will always succeed
+	 */
+	public boolean loadFromStackOrArgs(int badVPN, int ppn, TranslationEntry pTEntry) {
 		// System.out.println("loading from stack/args");
 		// create a new array that is completely zeroed out of size "pageSize"
 		byte[] zeroedArray = new byte[pageSize];
 		// source, source pos, dest. dest pos, length
 		System.arraycopy(zeroedArray, 0, Machine.processor().getMemory(), ppn * pageSize, pageSize);
-
-		// update entries 
+		// update entries
 		pTEntry.ppn = ppn;
 		pTEntry.valid = true;
 		pTEntry.readOnly = false;
 		pTEntry.used = true;
+		// update the IPT
 		updateIPT(badVPN, ppn);
+		// should always return true, as it will always be the last case
 		return true;
 	}
-	
 
+	/**
+	 * This method simply tries to load a page from the swap file if an entry was
+	 * dirty
+	 * 
+	 * @param badVPN  address of the faulting page
+	 * @param ppn     ppn to update to
+	 * @param pTEntry translation entry to update
+	 * @return true on succes or false on failure
+	 */
 	public boolean loadFromSwapFile(int badVPN, int ppn, TranslationEntry pTEntry) {
 		// extract the spn from the entries ppn, as this is where we stored the spn
 		int spn = VMKernel.vpnToSpnMap.get(badVPN);
 		// read the page from swap file into physical memory
-		int bytesRead = VMKernel.swapFile.read(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
-		if(bytesRead == -1) {
-			return false;			
+		int bytesRead = VMKernel.swapFile.read(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize,
+				pageSize);
+		// return an false if failed to read anything
+		if (bytesRead == -1) {
+			return false;
 		}
+		// update entries
 		pTEntry.ppn = ppn;
 		pTEntry.valid = true;
 		pTEntry.used = true;
+		// update the IPT
 		updateIPT(badVPN, ppn);
+		// remove the VPN TO SPN mapping for the specified vpn
 		VMKernel.vpnToSpnMap.remove(badVPN);
+		// add the spn back to the list of free spns
 		VMKernel.deallocateSPN(spn);
-
+		// successful load from swap file
 		return true;
 	}
-	
+
 	private static final int pageSize = Processor.pageSize;
 
 	private static final char dbgProcess = 'a';
@@ -433,33 +476,35 @@ public class VMProcess extends UserProcess {
 	private static final char dbgVM = 'v';
 
 	private static final int pageFault = Processor.exceptionPageFault;
-	
+
 	// initialize this clock hand to be 0
 	private static int clockHand = 0;
 
-	// initialize a lock for synchronization and editing of the clock hand static varaible
+	// initialize a lock for synchronization and editing of the clock hand static
+	// varaible
 	private static Lock updateClockHandLock = new Lock();
 	private static Lock updateIPTLock = new Lock();
 	private static Lock pageFaultLock = new Lock();
-		
+
 	/**
 	 * This method is a clock algorithm method designed to select a victim page
 	 * to evict from memory
-	 * @return the victim page to be evicted
+	 * 
+	 * @return ppn, the evicted victim page
 	 */
-	public static int selectVictimPage(){
+	public static int selectVictimPage() {
 		updateClockHandLock.acquire();
 		// System.out.println("evicting page ...");
 		int ppn = clockHand;
 		// int initialClockHand = clockHand;
-		
+
 		// loop through the physical pages until a page to evict is found
-		while(true){
+		while (true) {
 			// System.out.println("current clock hand/ppn checking: " + ppn);
 			// printInvertedPageTable();
 
 			// check that the physical page is actually in use by a process
-			if(VMKernel.invertedPageTable.get(ppn) == null) {
+			if (VMKernel.invertedPageTable.get(ppn) == null) {
 				// check the next physical page
 				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
 				continue;
@@ -475,46 +520,48 @@ public class VMProcess extends UserProcess {
 			// extract the translationEntry associated with the VPN
 			TranslationEntry ptEntry = processFromPage.getTranslationEntry(vpn);
 			// check entry used bit
-			if (ptEntry.used){
+			if (ptEntry.used) {
 				// if used then set to false and check next entry
 				ptEntry.used = false;
-				// increment ppn 
+				// increment ppn
 				ppn = (ppn + 1) % Machine.processor().getNumPhysPages();
 
 				// System.out.println("ppn incremented");
 			}
 			// found page to evict
 			else {
-				// System.out.println("evicting page " + ppn + "\n -----page table before------- ");
+				// System.out.println("evicting page " + ppn + "\n -----page table before-------
+				// ");
 				// printProcessPageTable(processFromPage);
 				int spn = -1;
 				// if page is dirty must write out to swap
 				if (ptEntry.dirty) {
 					// if all free spns have been taken, add more spns to the list
-					if(VMKernel.getNumOfFreeSPNS() == 0){
+					if (VMKernel.getNumOfFreeSPNS() == 0) {
 						VMKernel.addMoreSPNSToList();
 					}
-					
+
 					// get spn number to write in file
 					spn = VMKernel.allocateSPN();
 					// System.out.println("Swap file page number "+spn);
 					// store mapping for vpn to spn for swapping back in
 					VMKernel.vpnToSpnMap.put(vpn, spn);
 					// write physical page to swap file at the position indicated by the spn
-					int bytesWritten = VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
-					if(bytesWritten == -1) {
+					int bytesWritten = VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(),
+							ppn * pageSize, pageSize);
+					if (bytesWritten == -1) {
 						return -1;
 					}
 				}
-				
-				//System.out.println("Invalidating entry breaking loop...");
 
-				// invalidate Valid entry 
+				// System.out.println("Invalidating entry breaking loop...");
+
+				// invalidate Valid entry
 				ptEntry.valid = false;
 				// ptEntry.ppn = -1;
 				// set clockhand to point to the physical page next to the evicted page
 				clockHand = (ppn + 1) % Machine.processor().getNumPhysPages();
-				
+
 				// remove the entry from the IPT
 				updateIPTLock.acquire();
 				VMKernel.invertedPageTable.remove(ppn);
@@ -523,15 +570,16 @@ public class VMProcess extends UserProcess {
 				// add this page back to the list of free physical pages
 				// System.out.println("num free pages: " + UserKernel.getNumOfFreePages());
 				UserKernel.deallocatePage(ppn);
-				// System.out.println("num free pages after deallocate: " + UserKernel.getNumOfFreePages());
+				// System.out.println("num free pages after deallocate: " +
+				// UserKernel.getNumOfFreePages());
 				updateClockHandLock.release();
-				// returns the page that was evicted
 				// System.out.println("---------page table after----------- ");
 				// printProcessPageTable(processFromPage);
 
+				// returns the page that was evicted
 				return ppn;
 			}
-		} 
+		}
 	}
 
 	/**
@@ -556,6 +604,8 @@ public class VMProcess extends UserProcess {
 
 	/**
 	 * this method simply prints out the current process page table
+	 * 
+	 * @param currentProcess
 	 */
 	public static void printProcessPageTable(UserProcess currentProcess) {
 		TranslationEntry[] currentPageTable = currentProcess.getPageTable();
@@ -564,24 +614,23 @@ public class VMProcess extends UserProcess {
 		System.out.println("------------- Process Page Table ------------- ");
 		for (int i = 0; i < currentPageTable.length; i++) {
 			TranslationEntry currentTranslationEntry = currentPageTable[i];
-			System.out.print("Translation Entry: [" + i + "] (");
-			System.out.print(" | vpn: " + currentTranslationEntry.vpn);
-			System.out.print(" | ppn: " + currentTranslationEntry.ppn);
-			System.out.print(" | valid: " + currentTranslationEntry.valid);
-			System.out.print(" | readOnly: " + currentTranslationEntry.readOnly);
-			System.out.print(" | used: " + currentTranslationEntry.used);
-			System.out.print(" | dirty: " + currentTranslationEntry.dirty + ")\n");
+			printTranslationEntry(currentTranslationEntry);
 		}
 	}
 
-	public static void printTranslationEntry(TranslationEntry currentTranslationEntry){
-			System.out.print("Translation Entry: (");
-			System.out.print(" | vpn: " + currentTranslationEntry.vpn);
-			System.out.print(" | ppn: " + currentTranslationEntry.ppn);
-			System.out.print(" | valid: " + currentTranslationEntry.valid);
-			System.out.print(" | readOnly: " + currentTranslationEntry.readOnly);
-			System.out.print(" | used: " + currentTranslationEntry.used);
-			System.out.print(" | dirty: " + currentTranslationEntry.dirty + ")\n");
+	/**
+	 * this method simply prints out the specified translation entry
+	 * 
+	 * @param currentTranslationEntry
+	 */
+	public static void printTranslationEntry(TranslationEntry currentTranslationEntry) {
+		System.out.print("Translation Entry: (");
+		System.out.print(" | vpn: " + currentTranslationEntry.vpn);
+		System.out.print(" | ppn: " + currentTranslationEntry.ppn);
+		System.out.print(" | valid: " + currentTranslationEntry.valid);
+		System.out.print(" | readOnly: " + currentTranslationEntry.readOnly);
+		System.out.print(" | used: " + currentTranslationEntry.used);
+		System.out.print(" | dirty: " + currentTranslationEntry.dirty + ")\n");
 	}
-	
+
 }

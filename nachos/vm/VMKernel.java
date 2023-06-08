@@ -27,9 +27,9 @@ public class VMKernel extends UserKernel {
 		freeSpnList = new LinkedList<Integer>();
 		freeSPNLock = new Lock();
 		updateCurrSPNLock = new Lock();
-		invertedPageTable = new HashMap<Integer, Entry<Integer,Integer>>();
-		vpnToSpnMap = new HashMap<Integer,Integer>();
-		swapFile =  ThreadedKernel.fileSystem.open("swapFile", true);
+		invertedPageTable = new HashMap<Integer, Entry<Integer, Integer>>();
+		vpnToSpnMap = new HashMap<Integer, Integer>();
+		swapFile = ThreadedKernel.fileSystem.open("swapFile", true);
 	}
 
 	/**
@@ -62,8 +62,8 @@ public class VMKernel extends UserKernel {
 
 	// data structure that represents an inverted page table, mapping PPNs (key)
 	// to a user processes' PID and VPN (value)
-	public static HashMap<Integer, Entry<Integer,Integer>> invertedPageTable;
-	// swap file 
+	public static HashMap<Integer, Entry<Integer, Integer>> invertedPageTable;
+	// swap file
 	public static OpenFile swapFile;
 
 	// data structure to hold vpn to spn mappings
@@ -120,6 +120,7 @@ public class VMKernel extends UserKernel {
 
 	/**
 	 * this method just returns the number of free spns in our freeSpn list
+	 * 
 	 * @return size of the free spn list
 	 */
 	public static int getNumOfFreeSPNS() {
@@ -129,11 +130,12 @@ public class VMKernel extends UserKernel {
 	/**
 	 * this method will add a certain amount of spns to the spnlist
 	 */
-	public static void addMoreSPNSToList(){
+	public static void addMoreSPNSToList() {
 		// allocate a total of 100 additional spns
-		for(int i = currentSPN; i < currentSPN + NUM_OF_SPNS_TO_ALLOCATE; i++){
+		for (int i = currentSPN; i < currentSPN + NUM_OF_SPNS_TO_ALLOCATE; i++) {
 			deallocateSPN(i);
 		}
+		// increment the spn count
 		updateCurrSPNLock.acquire();
 		currentSPN += NUM_OF_SPNS_TO_ALLOCATE;
 		updateCurrSPNLock.release();
