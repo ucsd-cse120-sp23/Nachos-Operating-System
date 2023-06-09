@@ -189,10 +189,3 @@ address space.  write should return an error.
 ...passed (r = -1)
 UserProcess.handleExit (0)
 Machine halting!
-
-Ticks: total 19098433, kernel 18875050, user 223383
-Disk I/O: reads 0, writes 0
-Console I/O: reads 1, writes 4416
-Paging: page faults 3296, TLB misses 0
-Swap: COFF reads 0, swap reads 0, swap writes 0
-Network I/O: received 0, sent 0
