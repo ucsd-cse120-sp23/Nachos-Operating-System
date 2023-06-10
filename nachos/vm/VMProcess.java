@@ -7,9 +7,6 @@ import nachos.threads.*;
 import nachos.userprog.*;
 import nachos.vm.*;
 import java.util.*;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Map.Entry;
 import java.util.AbstractMap.SimpleEntry;
 
@@ -324,6 +321,7 @@ public class VMProcess extends UserProcess {
 		// if the virtual page number is an invalid one, return false
 		// System.out.println("VPN TO FIX: " + badVPN);
 		if (badVPN < 0 || badVPN >= super.pageTable.length){
+			pageFaultLock.release();
 			return false;
 		}
 		// get the page table entry for the bad virtual page number
@@ -335,12 +333,13 @@ public class VMProcess extends UserProcess {
 		// failed to allocated a physical page, so prepare to evict a page via clock algo
 		if (ppn == -1) {
 			// if all the pages are then block this process
-			if (VMKernel.checkAllPagesPinned()) {
+			while (VMKernel.checkAllPagesPinned()) {
+				System.out.println("if this prints more than once then INFITE LOOP");
 				pageFaultLock.release();
 				VMKernel.waitForUnPin.sleep();
 				pageFaultLock.acquire();
 			}
-			// call the clock algorithm, which returns a now available
+			// call the clock algorithm, which returns an evicted pp
 			ppn = selectVictimPage();
 			// remove victim page from list 
 			UserKernel.allocatePage();
@@ -397,9 +396,9 @@ public class VMProcess extends UserProcess {
 	public void updateIPT(int badVPN, int ppn){
 		// System.out.println("update IPT badvpn :"+ badVPN +" to ppn "+ ppn);
 		// get current process id 
+		updateIPTLock.acquire();
 		int pID = super.getCurrentID();
 		// store the mapping of the physical page to the current process
-		updateIPTLock.acquire();
 		// store process ID with VPN mapping will be useful for checking process' page table
 		Entry<Integer, Integer> pidVPNEntry = new SimpleEntry<Integer, Integer>(pID, badVPN);
 		VMKernel.invertedPageTable.put(ppn, pidVPNEntry);
@@ -455,7 +454,9 @@ public class VMProcess extends UserProcess {
 
 	public boolean loadFromSwapFile(int badVPN, int ppn, TranslationEntry pTEntry) {
 		// extract the spn from the entries ppn, as this is where we stored the spn
-		int spn = VMKernel.vpnToSpnMap.get(badVPN);
+		// System.out.println("vpn to access: " + badVPN);
+		// printVPNTOSPNMAP();
+		int spn = vpnToSpnMap.get(badVPN);
 		// read the page from swap file into physical memory
 		int bytesRead = VMKernel.swapFile.read(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
 		if(bytesRead == -1) {
@@ -465,7 +466,7 @@ public class VMProcess extends UserProcess {
 		pTEntry.valid = true;
 		pTEntry.used = true;
 		// updateIPT(badVPN, ppn);
-		VMKernel.vpnToSpnMap.remove(badVPN);
+		vpnToSpnMap.remove(badVPN);
 		VMKernel.deallocateSPN(spn);
 
 		return true;
@@ -482,6 +483,7 @@ public class VMProcess extends UserProcess {
 	// initialize this clock hand to be 0
 	private static int clockHand = 0;
 
+
 	// initialize a lock for synchronization and editing of the clock hand static varaible
 	private static Lock updateClockHandLock = new Lock();
 	private static Lock updateIPTLock = new Lock();
@@ -493,7 +495,7 @@ public class VMProcess extends UserProcess {
 	 * to evict from memory
 	 * @return the victim page to be evicted
 	 */
-	public static int selectVictimPage(){
+	public int selectVictimPage(){
 		updateClockHandLock.acquire();
 		// System.out.println("evicting page ...");
 		int ppn = clockHand;
@@ -501,6 +503,7 @@ public class VMProcess extends UserProcess {
 		
 		// loop through the physical pages until a page to evict is found
 		while(true){
+			// printCurrentProcess();
 			// System.out.println("current clock hand/ppn checking: " + ppn);
 			// printInvertedPageTable();
 
@@ -544,11 +547,13 @@ public class VMProcess extends UserProcess {
 					// get spn number to write in file
 					spn = VMKernel.allocateSPN();
 					// System.out.println("Swap file page number "+spn);
+					// System.out.println("mapping vpn: "+ vpn + " spn "+ spn);
 					// store mapping for vpn to spn for swapping back in
-					VMKernel.vpnToSpnMap.put(vpn, spn);
+					processFromPage.setVPNToSPNMap(vpn, spn);
 					// write physical page to swap file at the position indicated by the spn
 					int bytesWritten = VMKernel.swapFile.write(spn * pageSize, Machine.processor().getMemory(), ppn * pageSize, pageSize);
 					if(bytesWritten == -1) {
+						updateClockHandLock.release();
 						return -1;
 					}
 				}
@@ -628,6 +633,29 @@ public class VMProcess extends UserProcess {
 			System.out.print(" | readOnly: " + currentTranslationEntry.readOnly);
 			System.out.print(" | used: " + currentTranslationEntry.used);
 			System.out.print(" | dirty: " + currentTranslationEntry.dirty + ")\n");
+	}
+	
+	public void printVPNTOSPNMAP(){
+		// if the ppnPin map is empty, no pages are pinned
+		if(vpnToSpnMap.isEmpty()){
+			System.out.println("vpn to spn map is empty!");
+			return;
+		}
+		printCurrentProcess();
+		System.out.println("---------VPNTOSPN--------SIZE:" + vpnToSpnMap.size());
+		// else if it is non empty, iterate through all pages and check if at least one of them is unpinned
+		for (Iterator<Integer> keys = vpnToSpnMap.keySet().iterator(); keys.hasNext();) {
+			// get the current key, a ppn
+			Integer	 vpn = keys.next();
+			// get the current value, boolean if pinned
+			Integer spn = vpnToSpnMap.get(vpn);
+			System.out.println("VPN: " + vpn + " mapped to SPN: " + spn);
+		}
+	}
+
+	public void printCurrentProcess(){
+		int pid = super.getCurrentID();
+		System.out.println("CURRENT PROCESS: " + super.currentProcesses.get(pid));
 	}
 	
 }

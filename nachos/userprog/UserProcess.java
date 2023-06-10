@@ -6,13 +6,10 @@ import nachos.userprog.*;
 import nachos.vm.*;
 
 import java.util.*;
-import java.util.ArrayDeque;
-import java.util.HashMap;
 import java.util.Map.Entry;
 import java.lang.String;
 
 import java.io.EOFException;
-import java.util.LinkedList;
 
 /**
  * Encapsulates the state of a user process that is not contained in its user
@@ -1345,6 +1342,9 @@ public class UserProcess {
 	private HashMap<Integer, Integer> childrenExitStatuses = new HashMap<Integer, Integer>();
 	// data structure that holds every process
 	protected static HashMap<Integer, UserProcess> currentProcesses = new HashMap<Integer, UserProcess>();
+	// data structure to hold vpn to spn mappings
+	protected HashMap<Integer, Integer> vpnToSpnMap = new HashMap<Integer,Integer>();
+
 
 	// Synchronization Support
 	private static Lock updatePIDLock = new Lock();
@@ -1427,4 +1427,8 @@ public class UserProcess {
 		return this.pageTable;
 	}
 
+	
+	public void setVPNToSPNMap(int vpn, int spn){
+		vpnToSpnMap.put(vpn, spn);
+	}
 }

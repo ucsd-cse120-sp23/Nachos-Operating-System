@@ -33,7 +33,7 @@ NLIB = libnachos.a
 TARGETS = halt sh matmult sort echo cat cp mv rm write1 write4 snake write10 scheme dungeon-obf \
 		  dungeon-gen dungeon exit1 exec1 join1 execarg1 readtest2 readBadBuf writetest1 \
 		  writeToFile opentest2 createtest1 unlinktest1 closetest1 except1 readtest1 swap4   \
-		  swap5
+		  swap5 joinSW1 readtest3
 		  
 
 

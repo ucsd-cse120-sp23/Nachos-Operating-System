@@ -6,10 +6,10 @@ int main (void){
     char buffer[BYTES];
     int totalBytesRead = 0;
     // open the file for reading
-    fileDescriptor = open("garbage.txt");
+    fileDescriptor = open("verylongfile.txt");
     if(fileDescriptor < 0 || fileDescriptor > 15){
         close(fileDescriptor);
-        printf("Failed to open garbage.txt\n");
+        printf("Failed to open verylongfile.txt\n");
         exit(-1);
     }
     // read from file
@@ -18,7 +18,7 @@ int main (void){
     while(bytesRead == BYTES){
         printf("Bytes Read: %d\n", bytesRead);
         if(bytesRead < 0){
-            printf("Failed to read garbage.txt\n");
+            printf("Failed to read verylongfile.txt\n");
             close(fileDescriptor);
             exit(-1);
         }
@@ -27,9 +27,9 @@ int main (void){
         totalBytesRead += bytesRead;
     }
     printf("Total Bytes Read: %d", totalBytesRead);
-    if(totalBytesRead != 34239){
+    if(totalBytesRead != 86077){
         close(fileDescriptor);
-        printf("Did not read all the chars! :( from garbage.txt\n");
+        printf("Did not read all the chars! :( from verylongfile.txt\n");
         exit(-1);
     }
     printf("\n");

@@ -14,14 +14,22 @@ main (int argc, char *argv[])
 {
     int fd = open("output.txt");
     char *str = "\nroses are red\nviolets are blue\nI love Nachos\nand so do you\n\n";
-    
-    while (*str) {
-        int r = write (fd, str, 1);
-        if (r != 1) {
-            printf ("failed to write character (r = %d)\n", r);
-            exit (-1);
+    int i = 0;
+    int totalBytesWritten = 0;
+    while (i < 500) {
+        while (*str) {
+            int r = write (fd, str, 1);
+            if (r != 1) {
+                printf ("failed to write character (r = %d)\n", r);
+                exit (-1);
+            }
+            totalBytesWritten += r;
+            str++;
+            printf("total bytes written: %d\n", totalBytesWritten);
         }
-        str++;
+
+        str = "\nroses are red\nviolets are blue\nI love Nachos\nand so do you\n\n";
+        i++;
     }
 
     return 0;

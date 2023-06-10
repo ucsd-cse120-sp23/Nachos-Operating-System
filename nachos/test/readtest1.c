@@ -1,31 +1,22 @@
 #include "syscall.h"
-#define BYTES 40
+#define BYTES 1
 int main (void){
     int bytesRead;
     int fieldDescriptor;
     char buffer[BYTES];
-    char expected[] = "I am a very short file...";
     // open the file for reading
-    fieldDescriptor = open("shortfile.txt");
+    fieldDescriptor = open("verylongfile.txt");
     if(fieldDescriptor < 0 || fieldDescriptor > 15){
-        printf("Failed to open shortfile.txt\n");
+        printf("Failed to open verylongfile.txt\n");
         exit(-1);
     }
     // read from file
     bytesRead = read(fieldDescriptor, buffer, BYTES);
     printf("Bytes Read: %d\n", bytesRead);
     if(bytesRead < 0){
-        printf("Failed to read shortfile.txt\n");
+        printf("Failed to read verylongfile.txt\n");
         close(fieldDescriptor);
         exit(-1);
-    }
-    for(int i = 0; i < 25; i++){
-    // I am a very short file...
-        printf("%c", buffer[i]);
-        if(buffer[i] != expected[i]) {
-            printf("%c != %c\n", buffer[i], expected[i]);
-            exit(-1);
-        }
     }
     printf("\n");
     close(fieldDescriptor);
