@@ -15,3 +15,11 @@ Nachos (Not Another Completely Heuristic Operating System) is an educational ope
 3. Memory Management
    - Developed paging and virtual memory management strategies to optimize system performance.
    - Implemented dynamic memory allocation techniques for efficient resource handling.
+
+## Contributors
+
+- Alexander G. Arias
+- Alex N. Hernandez Perez
+- Alan Vu
+- Alex Wu
+
