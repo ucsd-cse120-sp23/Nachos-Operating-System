@@ -4,7 +4,7 @@
 
 Nachos (Not Another Completely Heuristic Operating System) is an educational operating system used in academic settings to teach concepts such as thread synchronization, CPU scheduling, and memory management. This project implements key OS components as part of a university-level course on operating systems.
 
-##Features Implemented
+## Features Implemented
 
 1. Synchronization
    - Implemented semaphores, locks, and condition variables to manage concurrent processes.
